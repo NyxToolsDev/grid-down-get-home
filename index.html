@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f380f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Grid Down: Get Home — a Game Boy-style survival adventure. The grid failed. You are 38 miles from home. Walk.">
+<title>Grid Down: Get Home</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%;
+    background: #0f380f;
+    overflow: hidden;
+    touch-action: none;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: monospace;
+    padding-top: env(safe-area-inset-top);
+  }
+  #err { color: #9bbc0f; font-size: 14px; padding: 4px; }
+  #screen {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #0f380f;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+  #deck {
+    display: none;
+    flex: 1;
+    width: 100%;
+    max-width: 560px;
+    position: relative;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  #dpadZone {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 55%;
+    touch-action: none;
+  }
+  #dpadGfx {
+    position: absolute;
+    width: 96px; height: 96px;
+    margin-left: -48px; margin-top: -48px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s;
+  }
+  #dpadGfx.on { opacity: 0.5; }
+  #dpadGfx::before, #dpadGfx::after {
+    content: '';
+    position: absolute;
+    background: #306230;
+    border: 2px solid #8bac0f;
+    border-radius: 6px;
+  }
+  #dpadGfx::before { left: 33px; top: 0; width: 30px; height: 96px; }
+  #dpadGfx::after { left: 0; top: 33px; width: 96px; height: 30px; }
+  .btn {
+    position: absolute;
+    border-radius: 50%;
+    background: #306230;
+    border: 3px solid #8bac0f;
+    color: #9bbc0f;
+    font-size: 22px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+  }
+  .btn.on { background: #8bac0f; color: #0f380f; }
+  #btnA { right: 18px; top: 22%; width: 76px; height: 76px; }
+  #btnB { right: 104px; top: 45%; width: 64px; height: 64px; }
+  #btnStart {
+    left: 50%; bottom: 10px;
+    transform: translateX(-50%);
+    width: 84px; height: 30px;
+    border-radius: 15px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div id="err"></div>
+<canvas id="screen" width="160" height="144"></canvas>
+<div id="deck">
+  <div id="dpadZone"><div id="dpadGfx"></div></div>
+  <div class="btn" id="btnA">A</div>
+  <div class="btn" id="btnB">B</div>
+  <div class="btn" id="btnStart">START</div>
+</div>
+<script src="js/data-tiles.js"></script>
+<script src="js/data-sprites.js"></script>
+<script src="js/data-font.js"></script>
+<script src="js/data-maps.js"></script>
+<script src="js/data-dialog.js"></script>
+<script src="js/data-items.js"></script>
+<script src="js/legend.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/save.js"></script>
+<script src="js/render.js"></script>
+<script src="js/input.js"></script>
+<script src="js/survival.js"></script>
+<script src="js/actors.js"></script>
+<script src="js/camp.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
