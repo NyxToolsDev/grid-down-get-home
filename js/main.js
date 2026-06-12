@@ -1487,6 +1487,10 @@ const Game = {
   },
 
   updateReport() {
+    if (this.report.won && Input.pressed('b')) {
+      try { window.open('https://nyxtoolsdev.github.io/grid-down-game/', '_blank'); } catch (e) { /* ignore */ }
+      return;
+    }
     if (Input.pressed('a') || Input.pressed('start')) {
       this.report = null;
       this.openTitle();
@@ -1567,7 +1571,8 @@ const Game = {
       R.text(r[0], 8, 26 + i * 11, true);
       R.text(r[1], 152 - r[1].length * 8, 26 + i * 11, true);
     });
-    if (this.st && this.st.ironWalk) R.textCenter('IRON WALK', 118, true);
+    if (this.st && this.st.ironWalk) R.textCenter('IRON WALK', 106, true);
+    if (this.report.won) R.textCenter('B: PLAY GRID DOWN', 118, true);
     R.textCenter('A: TITLE', 130, true);
   },
 
