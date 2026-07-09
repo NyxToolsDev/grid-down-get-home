@@ -124,9 +124,13 @@ const Game = {
     this.deathCause = null;
     this.showCard(DIALOG.cards.card_open_1, () => {
       this.showCard(DIALOG.cards.card_open_2, () => {
-        this.grantKey('photo');
-        this.enterScreen('INT_OFFICE', 4, 4, true);
-        this.mode = 'play';
+        this.showCard(['MOVE: D-PAD.', 'A: TALK, SEARCH,', 'AND SWING.'], () => {
+          this.showCard(['START: MENU WITH', 'PACK, MAP, HELP.', 'HOME IS EAST.'], () => {
+            this.grantKey('photo');
+            this.enterScreen('INT_OFFICE', 4, 4, true);
+            this.mode = 'play';
+          });
+        });
       });
     });
   },
@@ -205,6 +209,10 @@ const Game = {
     if (!id.startsWith('INT') && col >= 7) st.flags.crossed_river = true;
     const scObj = MAPS.screens[id];
     if (scObj && scObj.name) this.banner = { text: scObj.name, t: 120 };
+    if (!id.startsWith('INT') && !st.flags.hint_world) {
+      st.flags.hint_world = true;
+      this.showCard(['HOME IS 38 MILES', 'EAST. FOLLOW THE', 'ROADS. MAP: START.'], null);
+    }
     this.actors = Actors.spawnForScreen(st, id, this.gameApi());
     if (id === 'INT_HOME' && st.day >= 9) this.actors = [];
     this.spawnDynamic(id);
@@ -423,6 +431,19 @@ const Game = {
       if (dir) this.tryMove(dir);
     }
 
+    // one-time guidance
+    if (!st.flags.hint_search && !this.moving) {
+      const cue = this.interactTarget();
+      if (cue && cue.kind === 'box') {
+        this.hint('hint_search', ['THE ! OVER YOUR', 'HEAD MEANS PRESS', 'A HERE. SEARCH.']);
+        return;
+      }
+    }
+    if (!st.flags.hint_meters && Survival.conditions(st).length) {
+      this.hint('hint_meters', ['A METER IS LOW.', 'USE ITEMS IN YOUR', 'PACK (START).']);
+      return;
+    }
+
     // interact / B-use
     if (Input.pressed('a')) this.interact();
     if (Input.pressed('b')) this.useB();
@@ -494,6 +515,8 @@ const Game = {
     } else if (ev.type === 'gutOnset') {
       this.toast('YOUR STOMACH TURNS.');
       GAudio.sfx('hurt');
+    } else if (ev.type === 'dusk') {
+      this.hint('hint_night', ['DUSK. NIGHTS GET', 'COLD FAST. FIND', 'A BED OR A FIRE.']);
     }
   },
 
@@ -607,6 +630,7 @@ const Game = {
           this.grantItem('stick');
           this.grantItem('bottle');
           st.flags.bag_have = true;
+          this.hint('hint_stick', ['A STICK IS IN THE', 'BAG. OPEN PACK,', 'PRESS A: EQUIP B.']);
         }
       }
     });
@@ -1363,17 +1387,27 @@ const Game = {
     if (this.toastQ.length === 1) this.toastT = 90;
   },
 
-  // word-wrap a toast into at most two 18-char lines
-  wrap18(msg) {
+  // word-wrap into width-char lines
+  wrapN(msg, width) {
     const words = String(msg).split(' ');
     const lines = [''];
     for (const w of words) {
       const cur = lines[lines.length - 1];
-      if ((cur.length ? cur.length + 1 : 0) + w.length <= 18) {
+      if ((cur.length ? cur.length + 1 : 0) + w.length <= width) {
         lines[lines.length - 1] = cur ? cur + ' ' + w : w;
-      } else lines.push(w.slice(0, 18));
+      } else lines.push(w.slice(0, width));
     }
-    return lines.slice(0, 2);
+    return lines;
+  },
+
+  wrap18(msg) { return this.wrapN(msg, 18).slice(0, 2); },
+
+  // one-time tutorial card(s), keyed by a run flag
+  hint(id, lines1, lines2) {
+    if (this.st.flags[id]) return false;
+    this.st.flags[id] = true;
+    this.showCard(lines1, lines2 ? () => this.showCard(lines2, null) : null);
+    return true;
   },
 
   startBusy(total, then) {
@@ -1394,7 +1428,7 @@ const Game = {
 
   updateMenu() {
     const m = this.menu;
-    const PAGES = 4;
+    const PAGES = 5;
     if (Input.pressed('left')) { m.page = (m.page + PAGES - 1) % PAGES; m.idx = 0; GAudio.sfx('blip'); }
     if (Input.pressed('right')) { m.page = (m.page + 1) % PAGES; m.idx = 0; GAudio.sfx('blip'); }
     if (Input.pressed('start') || Input.pressed('b')) {
@@ -1607,7 +1641,10 @@ const Game = {
   drawCard(lines) {
     R.ctx.fillStyle = R.PAL[0];
     R.ctx.fillRect(0, 0, R.W, R.H);
-    (lines || []).forEach((l, i) => R.textCenter(l, 56 + i * 12, true));
+    const out = [];
+    (lines || []).forEach((l) => this.wrapN(l, 18).forEach((w) => out.push(w)));
+    const top = Math.max(32, 56 - (out.length - 3) * 6);
+    out.slice(0, 6).forEach((l, i) => R.textCenter(l, top + i * 12, true));
     if (this.frame % 60 < 40) R.textCenter('A', 128, true);
   },
 
@@ -1823,13 +1860,14 @@ const Game = {
   drawDialog() {
     R.box(0, 96, 160, 48);
     const box = this.dialogQ[0] || [''];
+    const lines = [];
+    box.forEach((l) => this.wrapN(l, 18).forEach((w) => lines.push(w)));
     let remaining = Math.floor(this.dialogChars);
-    for (let i = 0; i < box.length; i++) {
-      const line = box[i];
+    lines.slice(0, 3).forEach((line, i) => {
       const show = line.slice(0, Math.max(0, remaining));
       remaining -= line.length + 1;
       R.text(show, 6, 103 + i * 12, false);
-    }
+    });
     const full = box.join('\n').length;
     if (this.dialogChars >= full && this.frame % 40 < 25) R.draw('icon_arrow', 148, 134, {});
   },
@@ -1853,7 +1891,7 @@ const Game = {
     R.ctx.fillStyle = R.PAL[0];
     R.ctx.fillRect(0, 0, R.W, R.H);
     const m = this.menu;
-    const titles = ['PACK', 'MAP', 'STATUS', 'SYSTEM'];
+    const titles = ['PACK', 'MAP', 'STATUS', 'SYSTEM', 'HELP'];
     R.textCenter('< ' + titles[m.page] + ' >', 4, true);
     if (m.page === 0) {
       const items = this.menuItems();
@@ -1863,9 +1901,18 @@ const Game = {
         const y = 40 + i * 11;
         if (i === m.idx) R.text('>', 4, y, true);
         R.draw('item_' + it.id, 14, y, {});
-        R.text((it.key ? '*' : '') + ITEMS.defs[it.id].name.slice(0, 15), 26, y, true);
+        R.text((it.key ? '*' : '') + ITEMS.defs[it.id].name.slice(0, 14), 26, y, true);
+        if (st.bSlot === it.id) R.text('B', 148, y, true);
       });
       if (!items.length) R.textCenter('EMPTY POCKETS', 70, true);
+      const sel = items[m.idx];
+      if (sel) {
+        const d = ITEMS.defs[sel.id];
+        let use = 'A: INFO';
+        if (d.equip) use = st.bSlot === sel.id ? 'EQUIPPED ON B' : 'A: EQUIP TO B';
+        else if (!sel.key) use = 'A: USE NOW';
+        R.text(use, 8, 120, true);
+      }
     } else if (m.page === 1) {
       if (!this.hasKey('map')) {
         R.textCenter('NO MAP.', 64, true);
@@ -1899,13 +1946,23 @@ const Game = {
       lines.push(conds.length ? conds.slice(0, 2).join(' ') : 'STEADY.');
       if (st.flashCharge < 100 && this.hasKey('flashlight')) lines.push('LIGHT ' + Math.round(st.flashCharge) + '%');
       lines.forEach((l, i) => R.text(l, 12, 22 + i * 13, true));
-    } else {
+    } else if (m.page === 3) {
       const opts = ['SOUND: ' + (this.meta.sound ? 'ON' : 'OFF'), 'SAVE + QUIT', 'ABANDON RUN'];
       opts.forEach((o, i) => {
         const y = 40 + i * 14;
         if (i === m.idx) R.text('>', 12, y, true);
         R.text(o, 24, y, true);
       });
+    } else {
+      const lines = [
+        'A: TALK SEARCH HIT',
+        'B: USE EQUIPPED',
+        'START: THIS MENU',
+        'EQUIP: PACK, THEN',
+        'A ON A TOOL.',
+        'HOME IS FAR EAST.',
+      ];
+      lines.forEach((l, i) => R.text(l, 8, 22 + i * 13, true));
     }
     R.text('START: CLOSE', 36, 132, true);
   },

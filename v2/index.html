@@ -52,24 +52,33 @@
     width: 55%;
     touch-action: none;
   }
-  #dpadGfx {
+  #dpad {
     position: absolute;
-    width: 96px; height: 96px;
-    margin-left: -48px; margin-top: -48px;
-    opacity: 0;
+    left: 18px; top: 50%;
+    width: 132px; height: 132px;
+    margin-top: -66px;
+    opacity: 0.55;
     pointer-events: none;
     transition: opacity 0.1s;
   }
-  #dpadGfx.on { opacity: 0.5; }
-  #dpadGfx::before, #dpadGfx::after {
-    content: '';
+  #dpad.on { opacity: 0.95; }
+  .dbar {
     position: absolute;
     background: #26303c;
     border: 2px solid #8ca4b4;
-    border-radius: 6px;
+    border-radius: 10px;
   }
-  #dpadGfx::before { left: 33px; top: 0; width: 30px; height: 96px; }
-  #dpadGfx::after { left: 0; top: 33px; width: 96px; height: 30px; }
+  .dbar.v { left: 45px; top: 0; width: 42px; height: 132px; }
+  .dbar.h { left: 0; top: 45px; width: 132px; height: 42px; }
+  .darm { position: absolute; width: 0; height: 0; border: 10px solid transparent; }
+  .darm.up    { left: 56px; top: 10px; border-bottom: 14px solid #8ca4b4; border-top: 0; }
+  .darm.down  { left: 56px; bottom: 10px; border-top: 14px solid #8ca4b4; border-bottom: 0; }
+  .darm.left  { left: 10px; top: 56px; border-right: 14px solid #8ca4b4; border-left: 0; }
+  .darm.right { right: 10px; top: 56px; border-left: 14px solid #8ca4b4; border-right: 0; }
+  #dpad.dir-up .darm.up { border-bottom-color: #f05858; }
+  #dpad.dir-down .darm.down { border-top-color: #f05858; }
+  #dpad.dir-left .darm.left { border-right-color: #f05858; }
+  #dpad.dir-right .darm.right { border-left-color: #f05858; }
   .btn {
     position: absolute;
     border-radius: 50%;
@@ -99,7 +108,16 @@
 <div id="err"></div>
 <canvas id="screen" width="160" height="144"></canvas>
 <div id="deck">
-  <div id="dpadZone"><div id="dpadGfx"></div></div>
+  <div id="dpadZone">
+    <div id="dpad">
+      <div class="dbar v"></div>
+      <div class="dbar h"></div>
+      <div class="darm up"></div>
+      <div class="darm down"></div>
+      <div class="darm left"></div>
+      <div class="darm right"></div>
+    </div>
+  </div>
   <div class="btn" id="btnA">A</div>
   <div class="btn" id="btnB">B</div>
   <div class="btn" id="btnStart">START</div>
