@@ -137,30 +137,35 @@ scr("B3", "SWITCH YARD", 2, [
     "#d,,,,,,d#",
     "#,,,,,,,,#",
     "TTTT--TTTT",
-], ents=[E("box", 1, 5, table="dumpster"), E("box", 8, 5, table="dumpster")])
+], ents=[E("box", 1, 5, table="dumpster"), E("box", 8, 5, table="dumpster"),
+         E("npc", 4, 2, id="biscuit")])
 
+# Jackknifed semi blocks the overpass mid-span: the fast lanes thread glass,
+# the clean line is the slow southern loop. Time or blood.
 scr("C3", "OVERPASS", 2, [
     "TTTT--TTTT",
     "#S,,--,,,#",
-    "==========",
-    "LLLL**LLLL",
-    "======cc==",
-    "---cc-----",
+    "==,,h**,==",
+    "LLLh***,LL",
+    "==,,**cc==",
+    "---cc,,h--",
     "T,,,,,,,,T",
     "TTTT--TTTT",
 ], ents=[E("sign", 1, 1, text="sign_overpass"), E("box", 6, 4, table="trunk"),
          E("box", 3, 5, table="trunk"), E("sleepcar", 4, 5)])
 
+# Fence line splits the alley: the shed door and the through-route east both
+# pass the den. Feed them, fight them, or go around via C3/E3.
 scr("D3", "DOG ALLEY", 2, [
     "TTTT--TTTT",
-    "#,,,,,,WW#",
-    "#d,,,,,DW#",
-    "----------",
-    "---,,,----",
-    "#d,,,,,,d#",
+    "#,,,f,,WW#",
+    "#d,,f,,DW#",
+    "----f,,,--",
+    "---,f,,---",
+    "#d,,f,,,d#",
     "#,,,,,,,,#",
     "TTTT,,TTTT",
-], ents=[E("dog", 3, 4), E("dog", 5, 5), E("dog", 6, 3),
+], ents=[E("dog", 6, 3), E("dog", 5, 5), E("dog", 7, 6),
          E("box", 1, 2, table="dumpster"), E("box", 1, 5, table="dumpster"),
          E("box", 8, 5, table="dumpster")],
    doors={"7,2": {"to": "INT_RAILSHED", "at": [4, 6]}})
@@ -272,7 +277,7 @@ scr("E4", "MOTEL COURT", 3, [
     "#,S,,,,,,#",
     "TTTTTTTTTT",
 ], ents=[E("sign", 2, 6, text="sign_motel"), E("box", 8, 2, table="vending"),
-         E("box", 7, 5, table="trunk")])
+         E("box", 7, 5, table="trunk"), E("npc", 3, 3, id="junie")])
 
 scr("E5", "TOWN SQUARE", 3, [
     "TTTT--TTTT",
@@ -353,7 +358,8 @@ scr("E6", "UNDERPASS W", 4, [
     "#,,,,,,,c#",
     "##########",
 ], ents=[E("sign", 2, 2, text="sign_underpass"), E("box", 8, 5, table="dumpster"),
-         E("box", 8, 6, table="trunk")], dark=True, interior=True)
+         E("box", 8, 6, table="trunk"), E("npc", 2, 5, id="wes")],
+   dark=True, interior=True)
 
 scr("E7", "UNDERPASS E", 4, [
     "####,,####",
@@ -401,14 +407,16 @@ scr("B8", "HOLLER FARM", 5, [
 ], ents=[E("sign", 2, 6, text="sign_farm")],
    doors={"4,1": {"to": "INT_FARMHOUSE", "at": [4, 6]}})
 
+# The river took a bite out of the county road. Fast lanes wade glass at the
+# washout lip; the dry line loops south past the cars.
 scr("C7", "COUNTY ROAD", 5, [
     "TTTT,,TTTT",
     "~....,...T",
-    "R=========",
-    "RLLLLLLLLL",
-    "~====cc===",
-    "~..cc....T",
-    "R,.......T",
+    "R==~~~,===",
+    "RLL~~h,LLL",
+    "~=,,h,cc==",
+    "~..cc,...T",
+    "R,,......T",
     "TTTT,,TTTT",
 ], ents=[E("box", 6, 4, table="trunk"), E("box", 3, 5, table="trunk"),
          E("sleepcar", 4, 5)])
@@ -456,7 +464,8 @@ scr("E8", "MAPLE LANE", 5, [
     "#.d...T..T",
     "#..T...T.T",
     "TTTT,,TTTT",
-], ents=[E("box", 8, 2, table="trunk"), E("box", 2, 5, table="dumpster")])
+], ents=[E("box", 8, 2, table="trunk"), E("box", 2, 5, table="dumpster"),
+         E("dog", 4, 3), E("dog", 5, 5)])
 
 scr("F8", "HOME STREET", 5, [
     "TTTT,,TTTT",

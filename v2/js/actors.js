@@ -145,7 +145,7 @@ const Actors = {
       return;
     }
     const dAdj = game.diff === 'hard' ? 1 : game.diff === 'easy' ? -1 : 0;
-    const radius = (game.night || st.hearts <= 2 ? 5 : 3) + dAdj;
+    const radius = (game.night || st.hearts <= 2 ? 5 : 4) + dAdj;
     const d = this.dist(a, P.x, P.y);
     switch (a.state) {
       case 'wander':

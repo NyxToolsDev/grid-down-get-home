@@ -27,15 +27,96 @@ const DIALOG = /*JSON*/{
         ]
       },
       {
-        "if": { "dayMin": 2 },
+        "if": { "flag": "biscuit_returned" },
         "lines": [
-          ["BISCUIT WON'T GO", "NEAR THE TRACKS.", "DOGS THERE NOW."],
-          ["DON'T RUN.", "REMEMBER."]
+          ["BISCUIT WON'T", "LEAVE MY SIDE.", "THANKS, MISTER."]
+        ]
+      },
+      {
+        "if": { "flag": "biscuit_found", "notFlag": "biscuit_returned" },
+        "set": { "flags": { "biscuit_returned": true }, "give": "granola", "karma": 1 },
+        "lines": [
+          ["HE CAME RUNNING.", "RIGHT TO ME."],
+          ["MOM SAYS TAKE", "THIS. SHE MEANS", "IT."]
+        ]
+      },
+      {
+        "if": { "dayMin": 2, "notFlag": "biscuit_missing" },
+        "set": { "flags": { "biscuit_missing": true } },
+        "lines": [
+          ["BISCUIT'S GONE.", "RAN OFF TOWARD", "THE TRACKS."],
+          ["SWITCH YARD, I", "BET. I'M NOT", "ALLOWED PAST 3RD."],
+          ["DON'T RUN AT HIM.", "HE ONLY CHASES", "IF YOU RUN."]
+        ]
+      },
+      {
+        "if": { "flag": "biscuit_missing" },
+        "lines": [
+          ["DID YOU SEE HIM?", "BROWN. DUMB EARS.", "PLEASE LOOK."]
         ]
       },
       {
         "lines": [
           ["DON'T RUN.", "THAT'S THE WHOLE", "TRICK."]
+        ]
+      }
+    ],
+    "biscuit": [
+      {
+        "if": { "flag": "biscuit_found" },
+        "lines": [
+          ["GONE HOME."]
+        ]
+      },
+      {
+        "set": { "flags": { "biscuit_found": true } },
+        "lines": [
+          ["THE DOG SHIVERS", "BEHIND A BOXCAR.", "DUMB EARS. BROWN."],
+          ["IT KNOWS YOU", "SOMEHOW. IT BOLTS", "WEST. HOME."]
+        ]
+      }
+    ],
+    "junie": [
+      {
+        "if": { "flag": "letter_delivered" },
+        "lines": [
+          ["YOU TOLD DEE?", "THEN I CAN LIMP", "SLOW. THANK YOU."]
+        ]
+      },
+      {
+        "if": { "item": "letter" },
+        "lines": [
+          ["GO ON. CEDAR RUN", "GATE. ASK FOR", "DEE. TELL HER."]
+        ]
+      },
+      {
+        "set": { "give": "letter" },
+        "lines": [
+          ["TWISTED MY ANKLE", "DAY ONE. I CAN'T", "WALK THE MILES."],
+          ["MY SISTER WORKS", "THE CEDAR RUN", "GATE. NAME'S DEE."],
+          ["TELL HER JUNIE'S", "ALIVE. ROOM TWO.", "THAT'S ALL I ASK."]
+        ]
+      }
+    ],
+    "wes": [
+      {
+        "if": { "flag": "wes_told" },
+        "lines": [
+          ["AMES KNOWS?", "GOOD. NOW LET AN", "OLD MAN SIT."]
+        ]
+      },
+      {
+        "if": { "flag": "wes_found" },
+        "lines": [
+          ["I SAID WHAT I", "SAID. GO EAST,", "YOUNG PERSON."]
+        ]
+      },
+      {
+        "set": { "flags": { "wes_found": true } },
+        "lines": [
+          ["EASY. I LIVE HERE", "NOW. THE QUIET", "SUITS ME FINE."],
+          ["YOU KNOW AMES?", "TELL HIM WES IS", "FINE. NOT COMING."],
+          ["NOT TILL THE", "LIGHTS ARE BACK.", "MAYBE NOT THEN."]
         ]
       }
     ],
@@ -53,6 +134,14 @@ const DIALOG = /*JSON*/{
           ["I'M NOT LEAVING", "MY SHELVES.", "PEOPLE NEED THEM."],
           ["TAKE THE STRAW.", "DON'T DRINK CREEK", "WATER WITHOUT IT."],
           ["GOING EAST? TAKE", "THE INSULIN TO", "HOLLER FARM."]
+        ]
+      },
+      {
+        "if": { "notFlag": "water_asked" },
+        "set": { "flags": { "water_asked": true } },
+        "lines": [
+          ["THE PUMP'S IN TOWN", "SQUARE. I CAN'T", "LEAVE THE SHELVES."],
+          ["BRING A FULL", "BOTTLE IF YOU", "PASS. I TRADE."]
         ]
       },
       {
@@ -75,6 +164,30 @@ const DIALOG = /*JSON*/{
         "lines": [
           ["SOUP AT SIX.", "EVERY EVENING.", "NO QUESTIONS."],
           ["YOU CAN SLEEP IN", "A PEW. NOBODY", "TROUBLES A CHURCH."]
+        ]
+      },
+      {
+        "if": { "flag": "wes_found", "notFlag": "wes_told" },
+        "set": { "flags": { "wes_told": true }, "give": "hotmeal", "karma": 1 },
+        "lines": [
+          ["WES. ALIVE. IN", "THAT DARK HOLE.", "STUBBORN MULE."],
+          ["THANK YOU FOR", "CARRYING WORD.", "EAT. IT'S EARNED."]
+        ]
+      },
+      {
+        "if": { "flag": "pot_filled", "notFlag": "pot_thanked" },
+        "set": { "flags": { "pot_thanked": true } },
+        "lines": [
+          ["THE POT'S FULL", "BECAUSE OF YOU.", "BOWL'S ALWAYS ON."]
+        ]
+      },
+      {
+        "if": { "dayMin": 2, "notFlag": "wes_asked" },
+        "set": { "flags": { "wes_asked": true } },
+        "lines": [
+          ["ONE OF OURS IS", "MISSING. WES.", "SLEEPS ROUGH."],
+          ["SOMEONE SAW HIM", "NEAR THE ROUTE 9", "UNDERPASS. WEST."],
+          ["IF YOUR ROAD", "PASSES, LOOK IN", "ON HIM. PLEASE."]
         ]
       },
       {
@@ -149,6 +262,15 @@ const DIALOG = /*JSON*/{
     ],
     "dee": [
       {
+        "if": { "item": "letter", "notFlag": "letter_delivered" },
+        "set": { "flags": { "letter_delivered": true }, "takeKey": "letter", "intel": "D7", "karma": 1 },
+        "lines": [
+          ["THAT'S JUNIE'S", "HAND. SHE'S AT", "THE DRIFTWOOD?"],
+          ["WE'LL SEND A CART", "BEFORE FROST.", "YOU DID RIGHT."],
+          ["THERE'S WATER AT", "THE DRY MEADOW", "CULVERT. TAKE IT."]
+        ]
+      },
+      {
         "if": { "flag": "photo_shown" },
         "lines": [
           ["MAPLE LANE'S PAST", "THE OAKS. GO ON.", "THEY'RE WAITING."]
@@ -215,6 +337,13 @@ const DIALOG = /*JSON*/{
           ["YOU'RE HERE.", "YOU'RE ACTUALLY", "HERE."],
           ["WE HAVEN'T EVEN", "EATEN THE FRIDGE", "FOOD YET."],
           ["DON'T TELL ME.", "TELL ME TOMORROW.", "JUST COME IN."]
+        ]
+      },
+      {
+        "if": { "dayMax": 6, "karmaMin": 4 },
+        "lines": [
+          ["THE ROAD KEPT", "TELLING US ABOUT", "YOU. ALL OF IT."],
+          ["COME IN. COME IN.", "THE KID SAVED", "YOUR CHAIR."]
         ]
       },
       {
@@ -352,7 +481,8 @@ const DIALOG = /*JSON*/{
       ["MARKER ON CARD:", "NO STOCK LEFT.", "DON'T BOTHER."]
     ],
     "sign_church": [
-      ["ST. ANSELM'S", "SOUP AT 6.", "ALL WELCOME."]
+      ["ST. ANSELM'S", "SOUP AT 6.", "ALL WELCOME."],
+      ["PINNED NOTE:", "WES - COME HOME.", "ASK FOR AMES."]
     ],
     "sign_motel": [
       ["DRIFTWOOD MOTEL", "VACANCY"],
@@ -456,6 +586,7 @@ const DIALOG = /*JSON*/{
     "crowbar": "CROWBAR + PRY BOARDED DOORS.",
     "boltcutters": "BOLTCUTTERS + CUT CHAIN GATES.",
     "straw": "FILTER STRAW + CREEKS ARE SAFE NOW.",
+    "letter": "LETTER + JUNIE'S SISTER. CEDAR RUN.",
     "flashlight": "FLASHLIGHT + B TOGGLES. EATS CHARGE.",
     "batteries": "BATTERIES + FLASHLIGHT BACK TO FULL.",
     "map": "COUNTY MAP + MAP PAGE IN START MENU.",

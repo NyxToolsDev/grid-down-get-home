@@ -4,10 +4,13 @@
 // Exit 0 = pass (warnings allowed). Exit 1 = errors.
 
 import { readFileSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+// GDGH_DIR overrides the tree to validate (e.g. GDGH_DIR=v2 for the preview build)
+const ROOT = process.env.GDGH_DIR
+  ? resolve(process.env.GDGH_DIR)
+  : join(dirname(fileURLToPath(import.meta.url)), '..');
 const errors = [];
 const warns = [];
 const err = (m) => errors.push(m);
@@ -66,13 +69,13 @@ const SPRITE_8 = ['searched','alert_bang','zzz','heart_full','heart_half','heart
   'icon_gut','icon_cold','icon_arrow','icon_dot'];
 const ITEM_IDS = ['photo','bag','crowbar','boltcutters','straw','flashlight','batteries','map',
   'opener','stick','matches','bedroll','boards','poncho','bottle','granola','can','jerky',
-  'hotmeal','bandage','meds','insulin'];
+  'hotmeal','bandage','meds','insulin','letter'];
 
 const FONT_GLYPHS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', ' ', '.', ',', '!', '?',
   "'", '"', '-', ':', ';', '/', '(', ')', '+', '%', '<', '>'];
 
 const NPC_IDS = ['dale','theo','marta','ames','reyes','guard','dee','ruth','earl','sam','kid',
-  'beggar_a','beggar_b','walker_a','walker_b','walker_c','prowler'];
+  'beggar_a','beggar_b','walker_a','walker_b','walker_c','prowler','biscuit','junie','wes'];
 const SIGN_IDS = ['sign_plaza','sign_overpass','sign_pharmacy','sign_church','sign_motel',
   'sign_gas','sign_bridge_w','sign_trestle','sign_underpass','sign_checkpoint','sign_farm',
   'note_pharmacy','note_office'];
@@ -81,12 +84,14 @@ const CARD_IDS = ['card_open_1','card_open_2','card_day','card_frost','card_rain
   'card_death_thirst','card_collapse'];
 const ENDING_IDS = ['before_wave','homecoming','long_way','empty_house','promo'];
 const TOAST_IDS = ['photo','bag','crowbar','boltcutters','straw','flashlight','batteries',
-  'map','opener','stick','matches','bedroll','boards','poncho','noise','gate_cut',
+  'map','opener','stick','matches','bedroll','boards','poncho','letter','noise','gate_cut',
   'door_pried','glass_smashed','cache_found'];
 const FLAGS = ['met_dale','met_theo','met_marta','met_ames','met_reyes','met_dee','met_ruth',
   'met_sam','insulin_have','insulin_delivered','straw_given','toll_paid','toll_fought',
   'toll_sneaked','photo_shown','soup_today','fed_beggar','gave_food_today','frost_started',
-  'rain_today','day2plus','crossed_river','photo_have','bag_have'];
+  'rain_today','day2plus','crossed_river','photo_have','bag_have',
+  'biscuit_missing','biscuit_found','biscuit_returned','pot_asked','pot_filled','pot_thanked',
+  'letter_delivered','water_asked','marta_watered','wes_asked','wes_found','wes_told'];
 const CACHE_IDS = ['boxcar_cache','warehouse_fence','third_pew','scarecrow','culvert','farm_cellar'];
 const BOX_TABLES = ['desk','dumpster','trunk','vending','shelf','boxcar','fridge','cache'];
 const TABLE_TILE = { desk:'k', dumpster:'d', trunk:'c', vending:'v', shelf:'s', boxcar:'x',
@@ -242,15 +247,15 @@ function vMaps() {
     else if (found[0].screen !== where) err(`key item ${item} in ${found[0].screen}, want ${where}`);
   }
   const dogs = ents('dog');
-  const dogPlan = { D2: 1, D3: 3, A2: 1, B7: 2, A8: 2, C8: 1, E7: 1 };
+  const dogPlan = { D2: 1, D3: 3, A2: 1, B7: 2, A8: 2, C8: 1, E7: 1, E8: 2 };
   for (const [scr, n] of Object.entries(dogPlan)) {
     const have = dogs.filter((d) => d.screen === scr).length;
     if (have !== n) err(`dogs on ${scr}: ${have}, want ${n}`);
   }
-  if (dogs.length !== 11) err(`total dogs ${dogs.length}, want 11`);
+  if (dogs.length !== 13) err(`total dogs ${dogs.length}, want 13`);
   const npcPlan = { dale:'INT_OFFICE', theo:'C1', marta:'INT_PHARMACY', ames:'INT_CHURCH',
     reyes:'C6', guard:'C6', dee:'D8', ruth:'INT_FARMHOUSE', earl:'INT_FARMHOUSE',
-    sam:'INT_HOME', kid:'INT_HOME' };
+    sam:'INT_HOME', kid:'INT_HOME', biscuit:'B3', junie:'E4', wes:'E6' };
   const npcs = ents('npc');
   for (const [id, scr] of Object.entries(npcPlan)) {
     const found = npcs.filter((n) => n.id === id);

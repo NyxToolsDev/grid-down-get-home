@@ -5,7 +5,7 @@ const Survival = {
   tick(st, dt, env) {
     const ev = [];
     const mult = (st.ironWalk ? 1.25 : 1.0)
-      * (st.diff === 'easy' ? 0.8 : st.diff === 'hard' ? 1.2 : 1.0);
+      * (st.diff === 'easy' ? 0.8 : st.diff === 'hard' ? 1.2 : 1.1);
 
     // ---- clock ----
     const prevClock = st.clock;

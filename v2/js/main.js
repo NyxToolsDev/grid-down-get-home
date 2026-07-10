@@ -1,5 +1,18 @@
 // Grid Down: Get Home — boot, fixed-timestep loop, mode state machine,
 // player control, interactions, scripted encounters, HUD, menus, endings.
+
+// Side-quest registry for the TASKS menu page. active/mid/done are condOk
+// conditions; mid is the halfway state (found it, now report back).
+const QUESTS = [
+  { name: 'INSULIN TO FARM', active: { flag: 'insulin_have' }, done: { flag: 'insulin_delivered' } },
+  { name: 'FIND BISCUIT', active: { flag: 'biscuit_missing' }, mid: { flag: 'biscuit_found' }, midName: 'BISCUIT: TELL THEO', done: { flag: 'biscuit_returned' } },
+  { name: 'CANS FOR THE POT', active: { flag: 'pot_asked' }, done: { flag: 'pot_filled' }, nameFn: (st) => 'CANS FOR POT ' + Math.min(3, st.soupCans || 0) + '/3' },
+  { name: 'LETTER TO DEE', active: { item: 'letter' }, done: { flag: 'letter_delivered' } },
+  { name: 'WATER FOR MARTA', active: { flag: 'water_asked' }, done: { flag: 'marta_watered' } },
+  { name: 'LOOK IN ON WES', active: { flag: 'wes_asked' }, mid: { flag: 'wes_found' }, midName: 'TELL AMES RE WES', done: { flag: 'wes_told' } },
+];
+const QUEST_START_FLAGS = ['biscuit_missing', 'wes_asked', 'water_asked'];
+
 const Game = {
   mode: 'boot',
   st: null,
@@ -186,6 +199,7 @@ const Game = {
     if (id === 'photo') this.st.flags.photo_have = true;
     if (id === 'insulin') this.st.flags.insulin_have = true;
     this.toast((DIALOG.toasts[id] || ITEMS.defs[id].name));
+    if (id === 'insulin' || id === 'letter') this.toast('NEW TASK. SEE START MENU.');
     GAudio.sfx('item');
     Input.vibrate(50);
   },
@@ -768,23 +782,66 @@ const Game = {
 
   applySet(s) {
     const st = this.st;
-    if (s.flags) Object.assign(st.flags, s.flags);
+    if (s.flags) {
+      if (QUEST_START_FLAGS.some((f) => s.flags[f] && !st.flags[f])) {
+        this.toast('NEW TASK. SEE START MENU.');
+      }
+      Object.assign(st.flags, s.flags);
+    }
     if (s.give) this.grantItem(s.give);
     if (s.karma) st.karma += s.karma;
+    if (s.takeKey) {
+      const i = st.keys.indexOf(s.takeKey);
+      if (i >= 0) st.keys.splice(i, 1);
+    }
+    if (s.intel && st.intel.indexOf(s.intel) < 0) st.intel.push(s.intel);
   },
 
   npcExtras(id, a) {
     const st = this.st;
     if (id === 'ames') {
       const opts = [];
-      if (st.clock >= 1080 && st.clock < 1140 && !st.flags.soup_today) {
+      const soupOpen = (st.clock >= 1080 && st.clock < 1140) || st.flags.pot_filled;
+      if (soupOpen && !st.flags.soup_today) {
         opts.push({ label: 'HAVE SOUP', cb: () => { st.meters.f = Math.min(100, st.meters.f + 60); st.flags.soup_today = true; GAudio.sfx('eat'); this.toast('WARM. REAL.'); } });
+      }
+      if (this.invCount('can') >= 1 && !st.flags.pot_filled) {
+        opts.push({ label: 'CAN FOR THE POT', cb: () => {
+          this.removeInv('can');
+          st.soupCans = (st.soupCans || 0) + 1;
+          if (!st.flags.pot_asked) { st.flags.pot_asked = true; this.toast('NEW TASK. SEE START MENU.'); }
+          GAudio.sfx('confirm');
+          if (st.soupCans >= 3) {
+            st.flags.pot_filled = true;
+            st.karma += 2;
+            this.toast("THE POT'S FULL. BOWL'S ALWAYS ON.");
+          } else {
+            this.toast('IN IT GOES. ' + st.soupCans + ' OF 3.');
+          }
+        } });
       }
       if (this.invCount('can') >= 2) opts.push({ label: '2 CANS FOR MEDS', cb: () => { this.removeInv('can'); this.removeInv('can'); this.grantItem('meds'); } });
       if (this.invCount('jerky') >= 1) opts.push({ label: 'JERKY FOR BANDAGE', cb: () => { this.removeInv('jerky'); this.grantItem('bandage'); } });
       if (opts.length) {
         opts.push({ label: 'NEVER MIND', cb: null });
         this.openChoice(null, opts);
+      }
+    } else if (id === 'marta') {
+      if (st.flags.water_asked && !st.flags.marta_watered && this.hasInv('bottle')) {
+        this.openChoice(null, [
+          { label: 'GIVE WATER', cb: () => {
+            this.removeInv('bottle');
+            st.flags.marta_watered = true;
+            st.karma += 1;
+            this.grantItem('meds');
+          } },
+          { label: 'NOT NOW', cb: null },
+        ]);
+      }
+    } else if (id === 'biscuit') {
+      if (st.flags.biscuit_found) {
+        a.gone = true;
+        GAudio.sfx('bark');
       }
     } else if ((id === 'ruth' || id === 'earl') && st.flags.insulin_delivered && this.hasKey('insulin')) {
       // the dialog entry flips insulin_delivered (+1 karma); engine pays out
@@ -853,7 +910,8 @@ const Game = {
       const total = tab.reduce((s, e) => s + e[0], 0);
       let acc = 0, found = null;
       for (const [w, id] of tab) { acc += w; if (roll * total < acc) { found = id; break; } }
-      if (found && st.diff === 'hard' && this.hashRng(st.seed + key + 'h')() < 0.25) found = null;
+      const emptyP = st.diff === 'hard' ? 0.25 : st.diff === 'easy' ? 0 : 0.12;
+      if (found && emptyP && this.hashRng(st.seed + key + 'h')() < emptyP) found = null;
       if (found) {
         // pack full: leave the container unsearched so it can be tried again --
         // the roll is seeded per container, so the same item waits
@@ -1449,9 +1507,21 @@ const Game = {
     return st.keys.map((k) => ({ id: k, key: true })).concat(st.inv.map((i) => ({ id: i, key: false })));
   },
 
+  // quest lines for the TASKS page: {m: marker, t: text}
+  questLines() {
+    const st = this.st;
+    const out = [];
+    for (const q of QUESTS) {
+      if (q.done && this.condOk(q.done)) out.push({ m: '+', t: q.name });
+      else if (q.mid && this.condOk(q.mid)) out.push({ m: '>', t: q.midName });
+      else if (this.condOk(q.active)) out.push({ m: '>', t: q.nameFn ? q.nameFn(st) : q.name });
+    }
+    return out;
+  },
+
   updateMenu() {
     const m = this.menu;
-    const PAGES = 5;
+    const PAGES = 6;
     if (Input.pressed('left')) { m.page = (m.page + PAGES - 1) % PAGES; m.idx = 0; GAudio.sfx('blip'); }
     if (Input.pressed('right')) { m.page = (m.page + 1) % PAGES; m.idx = 0; GAudio.sfx('blip'); }
     if (Input.pressed('start') || Input.pressed('b')) {
@@ -1477,7 +1547,7 @@ const Game = {
           this.toast(DIALOG.toasts[it.id] || def.name);
         }
       }
-    } else if (m.page === 3) {
+    } else if (m.page === 4) {
       const opts = ['SOUND: ' + (this.meta.sound ? 'ON' : 'OFF'), 'SAVE + QUIT', 'ABANDON RUN'];
       if (Input.pressed('up')) { m.idx = (m.idx + opts.length - 1) % opts.length; GAudio.sfx('blip'); }
       if (Input.pressed('down')) { m.idx = (m.idx + 1) % opts.length; GAudio.sfx('blip'); }
@@ -1780,6 +1850,8 @@ const Game = {
       if (a.kind === 'dog') {
         spr = a.state === 'alert' ? 'dog_alert' : 'dog_' + f;
         flip = a.facing === 'right';
+      } else if (a.kind === 'npc' && a.id === 'biscuit') {
+        spr = 'dog_alert'; // shivering behind the boxcar
       } else if (a.kind === 'npc' && !a.wanderer && a.id !== 'guard' && SPRITES['npc_' + a.id]) {
         spr = 'npc_' + a.id;
       } else {
@@ -1923,7 +1995,7 @@ const Game = {
     R.ctx.fillStyle = R.PAL[0];
     R.ctx.fillRect(0, 0, R.W, R.H);
     const m = this.menu;
-    const titles = ['PACK', 'MAP', 'STATUS', 'SYSTEM', 'HELP'];
+    const titles = ['PACK', 'MAP', 'TASKS', 'STATUS', 'SYSTEM', 'HELP'];
     R.textCenter('< ' + titles[m.page] + ' >', 4, true);
     if (m.page === 0) {
       const items = this.menuItems();
@@ -1975,6 +2047,19 @@ const Game = {
         R.text('HOME: F8 EAST', 16, 122, true);
       }
     } else if (m.page === 2) {
+      const qs = this.questLines();
+      if (!qs.length) {
+        R.textCenter('NO TASKS YET.', 58, true);
+        R.textCenter('TALK TO PEOPLE.', 72, true);
+      } else {
+        qs.slice(0, 8).forEach((q, i) => {
+          const y = 20 + i * 12;
+          R.text(q.m, 4, y, true);
+          R.text(q.t.slice(0, 18), 14, y, true);
+        });
+        R.text('> OPEN  + DONE', 4, 120, true);
+      }
+    } else if (m.page === 3) {
       const lines = [
         'DAY ' + st.day + '  ' + Survival.clockStr(st.clock),
         'WATER ' + Math.round(st.meters.w),
@@ -1987,7 +2072,7 @@ const Game = {
       else lines.push('STEADY.');
       if (st.flashCharge < 100 && this.hasKey('flashlight')) lines.push('LIGHT ' + Math.round(st.flashCharge) + '%');
       lines.forEach((l, i) => R.text(l, 12, 22 + i * 13, true));
-    } else if (m.page === 3) {
+    } else if (m.page === 4) {
       const opts = ['SOUND: ' + (this.meta.sound ? 'ON' : 'OFF'), 'SAVE + QUIT', 'ABANDON RUN'];
       opts.forEach((o, i) => {
         const y = 40 + i * 14;
@@ -2001,9 +2086,11 @@ const Game = {
         'START: THIS MENU',
         'EQUIP: PACK, THEN',
         'A ON A TOOL.',
+        'TASKS: WHAT FOLKS',
+        'ASKED OF YOU.',
         'HOME IS FAR EAST.',
       ];
-      lines.forEach((l, i) => R.text(l, 8, 22 + i * 13, true));
+      lines.forEach((l, i) => R.text(l, 8, 20 + i * 12, true));
     }
     R.text('START: CLOSE', 36, 132, true);
   },
