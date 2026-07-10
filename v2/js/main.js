@@ -100,11 +100,11 @@ const Game = {
   },
 
   // ---------------------------------------------------------------- run state
-  newRun(loadoutId, secondWind, ironWalk) {
+  newRun(loadoutId, secondWind, ironWalk, diff) {
     const lo = ITEMS.loadouts[loadoutId];
     const st = {
       v: 1, seed: (Math.random() * 0xffffffff) >>> 0,
-      loadout: loadoutId, secondWind, ironWalk,
+      loadout: loadoutId, secondWind, ironWalk, diff: diff || 'normal',
       day: 1, clock: 977, gameSec: 0,
       screen: 'INT_OFFICE', px: 4, py: 4, facing: 'down',
       meters: { w: 70, f: 80, h: 100, e: 80 }, hearts: 8,
@@ -121,14 +121,23 @@ const Game = {
     };
     this.rngState = st.seed;
     this.st = st;
+    if (st.diff === 'hard') {
+      st.hearts = 6;
+      st.meters.w = 60; st.meters.f = 70; st.meters.e = 70;
+    }
     this.deathCause = null;
     this.showCard(DIALOG.cards.card_open_1, () => {
       this.showCard(DIALOG.cards.card_open_2, () => {
         this.showCard(['MOVE: D-PAD.', 'A: TALK, SEARCH,', 'AND SWING.'], () => {
           this.showCard(['START: MENU WITH', 'PACK, MAP, HELP.', 'HOME IS EAST.'], () => {
-            this.grantKey('photo');
-            this.enterScreen('INT_OFFICE', 4, 4, true);
-            this.mode = 'play';
+            const go = () => {
+              this.grantKey('photo');
+              this.enterScreen('INT_OFFICE', 4, 4, true);
+              this.mode = 'play';
+            };
+            if (st.diff === 'easy') {
+              this.showCard(['TOP BAR: HEARTS,', 'THEN WATER, FOOD,', 'WARMTH, ENERGY.'], go);
+            } else go();
           });
         });
       });
@@ -345,7 +354,7 @@ const Game = {
         }
       } else if (sel === 'NEW WALK') {
         this.mode = 'loadout';
-        this.title = { idx: 0, sw: true, iron: false };
+        this.title = { idx: 0, sw: true, iron: false, diff: 'normal' };
       } else {
         this.meta.sound = !this.meta.sound;
         GAudio.setEnabled(this.meta.sound);
@@ -356,7 +365,7 @@ const Game = {
 
   updateLoadout() {
     const t = this.title;
-    const rows = 3 + 1 + (this.meta.won ? 1 : 0) + 1; // loadouts, second wind, iron?, start
+    const rows = 3 + 2 + (this.meta.won ? 1 : 0) + 1; // loadouts, mode, second wind, iron?, start
     if (Input.pressed('up')) { t.idx = (t.idx + rows - 1) % rows; GAudio.sfx('blip'); }
     if (Input.pressed('down')) { t.idx = (t.idx + 1) % rows; GAudio.sfx('blip'); }
     if (Input.pressed('b')) { this.openTitle(); return; }
@@ -365,12 +374,14 @@ const Game = {
       if (t.idx < 3) {
         t.pick = ['edc', 'gym', 'prepper'][t.idx];
       } else if (t.idx === 3) {
+        t.diff = t.diff === 'normal' ? 'easy' : t.diff === 'easy' ? 'hard' : 'normal';
+      } else if (t.idx === 4) {
         t.sw = !t.sw;
-      } else if (this.meta.won && t.idx === 4) {
+      } else if (this.meta.won && t.idx === 5) {
         t.iron = !t.iron;
       } else {
         if (Save.loadRun()) Save.clearRun();
-        this.newRun(t.pick || 'edc', t.sw, t.iron);
+        this.newRun(t.pick || 'edc', t.sw, t.iron, t.diff || 'normal');
       }
     }
   },
@@ -435,12 +446,14 @@ const Game = {
     if (!st.flags.hint_search && !this.moving) {
       const cue = this.interactTarget();
       if (cue && cue.kind === 'box') {
-        this.hint('hint_search', ['THE ! OVER YOUR', 'HEAD MEANS PRESS', 'A HERE. SEARCH.']);
+        this.hint('hint_search', ['THE ! OVER YOUR', 'HEAD MEANS PRESS', 'A HERE. SEARCH.'],
+          st.diff === 'easy' ? ['SEARCHED SPOTS GET', 'A MARK. EMPTY IS', 'EMPTY FOR GOOD.'] : null);
         return;
       }
     }
     if (!st.flags.hint_meters && Survival.conditions(st).length) {
-      this.hint('hint_meters', ['A METER IS LOW.', 'USE ITEMS IN YOUR', 'PACK (START).']);
+      this.hint('hint_meters', ['A METER IS LOW.', 'USE ITEMS IN YOUR', 'PACK (START).'],
+        st.diff === 'easy' ? ['EAT AND DRINK AT', 'RED. COLD NEEDS', 'FIRE OR SHELTER.'] : null);
       return;
     }
 
@@ -507,7 +520,8 @@ const Game = {
       this.collapse();
     } else if (ev.type === 'dawn') {
       // daily rolls
-      st.rainToday = st.day === 2 ? true : (st.day >= 4 ? this.rng() < 0.25 : false);
+      const rainP = st.diff === 'hard' ? 0.4 : st.diff === 'easy' ? 0.15 : 0.25;
+      st.rainToday = st.day === 2 ? true : (st.day >= 4 ? this.rng() < rainP : false);
       if (st.rainToday) st.flags.rain_today = true; else st.flags.rain_today = false;
       if (st.day === 4) this.showCard(DIALOG.cards.card_frost, null);
       else if (st.day === 2 && st.rainToday) this.showCard(DIALOG.cards.card_rain, null);
@@ -516,7 +530,8 @@ const Game = {
       this.toast('YOUR STOMACH TURNS.');
       GAudio.sfx('hurt');
     } else if (ev.type === 'dusk') {
-      this.hint('hint_night', ['DUSK. NIGHTS GET', 'COLD FAST. FIND', 'A BED OR A FIRE.']);
+      this.hint('hint_night', ['DUSK. NIGHTS GET', 'COLD FAST. FIND', 'A BED OR A FIRE.'],
+        this.st.diff === 'easy' ? ['SLEEP: FACE A BED', 'OR CAR, PRESS A.', 'FIRES NEED MATCHES.'] : null);
     }
   },
 
@@ -838,6 +853,7 @@ const Game = {
       const total = tab.reduce((s, e) => s + e[0], 0);
       let acc = 0, found = null;
       for (const [w, id] of tab) { acc += w; if (roll * total < acc) { found = id; break; } }
+      if (found && st.diff === 'hard' && this.hashRng(st.seed + key + 'h')() < 0.25) found = null;
       if (found) {
         // pack full: leave the container unsearched so it can be tried again --
         // the roll is seeded per container, so the same item waits
@@ -1184,6 +1200,7 @@ const Game = {
       playerCovered: (LEGEND[this.tileChar(st.screen, st.px, st.py)] || {}).cover === true,
       playerMoving: !!this.moving || !!Input.dir(),
       night: Survival.phase(st.clock) === 'night',
+      diff: st.diff || 'normal',
       walkable: (x, y) => self.walkableFor(x, y, true),
       rng: () => self.rng(),
       sfx: (n) => GAudio.sfx(n),
@@ -1569,6 +1586,10 @@ const Game = {
       ],
       won: !!endingTitle,
     };
+    if (st.diff && st.diff !== 'normal') {
+      this.report.rows.splice(1, 0, ['MODE', st.diff.toUpperCase()]);
+      this.report.rows.pop();
+    }
     if (endingTitle) Save.clearRun();
     this.mode = 'report';
   },
@@ -1624,6 +1645,7 @@ const Game = {
     const t = this.title;
     const rows = [
       ITEMS.loadouts.edc.name, ITEMS.loadouts.gym.name, ITEMS.loadouts.prepper.name,
+      'MODE: ' + (t.diff || 'normal').toUpperCase(),
       'SECOND WIND: ' + (t.sw ? 'ON' : 'OFF'),
     ];
     if (this.meta.won) rows.push('IRON WALK: ' + (t.iron ? 'ON' : 'OFF'));
@@ -1637,8 +1659,12 @@ const Game = {
     const focus = t.idx < 3 ? ['edc', 'gym', 'prepper'][t.idx] : null;
     if (focus) {
       const d = ITEMS.loadouts[focus].desc || '';
-      R.text(d.slice(0, 19), 4, 112, true);
-      R.text(d.slice(19, 38), 4, 122, true);
+      this.wrapN(d, 19).slice(0, 3).forEach((l, i) => R.text(l, 4, 112 + i * 10, true));
+    } else if (t.idx === 3) {
+      const m = t.diff || 'normal';
+      const blurb = m === 'easy' ? 'GENTLER PACE. MORE GUIDANCE.'
+        : m === 'hard' ? 'SCARCE, MEAN, AND FAST.' : 'THE INTENDED WALK.';
+      this.wrapN(blurb, 19).slice(0, 3).forEach((l, i) => R.text(l, 4, 112 + i * 10, true));
     } else {
       R.text('B-BACK  A-PICK', 4, 122, true);
     }
@@ -1657,7 +1683,7 @@ const Game = {
   drawReport() {
     R.ctx.fillStyle = R.PAL[0];
     R.ctx.fillRect(0, 0, R.W, R.H);
-    R.textCenter(this.report.title, 8, true);
+    R.textCenter(String(this.report.title).slice(0, 19), 8, true);
     this.report.rows.forEach((r, i) => {
       R.text(r[0], 8, 26 + i * 11, true);
       R.text(r[1], 152 - r[1].length * 8, 26 + i * 11, true);
@@ -1845,8 +1871,8 @@ const Game = {
       else if (st.gutUntil > 0 && st.gameSec < st.gutUntil) pIcon = 'icon_gut';
       else if (st.meters.h <= 20) pIcon = 'icon_cold';
     }
-    R.draw(pIcon, 132, 1, {});
-    R.text('D' + st.day, 142, 1, true);
+    R.draw(pIcon, 124, 1, {});
+    R.text('D' + st.day, 134, 1, true);
     // meters
     const bars = [
       ['icon_drop', 2, 9, st.meters.w, '#4894e8'],
@@ -1957,7 +1983,8 @@ const Game = {
         'REST  ' + Math.round(st.meters.e),
       ];
       const conds = Survival.conditions(st);
-      lines.push(conds.length ? conds.slice(0, 2).join(' ') : 'STEADY.');
+      if (conds.length) this.wrapN(conds.slice(0, 2).join(' '), 18).slice(0, 2).forEach((c) => lines.push(c));
+      else lines.push('STEADY.');
       if (st.flashCharge < 100 && this.hasKey('flashlight')) lines.push('LIGHT ' + Math.round(st.flashCharge) + '%');
       lines.forEach((l, i) => R.text(l, 12, 22 + i * 13, true));
     } else if (m.page === 3) {

@@ -144,7 +144,8 @@ const Actors = {
       }
       return;
     }
-    const radius = game.night || st.hearts <= 2 ? 5 : 3;
+    const dAdj = game.diff === 'hard' ? 1 : game.diff === 'easy' ? -1 : 0;
+    const radius = (game.night || st.hearts <= 2 ? 5 : 3) + dAdj;
     const d = this.dist(a, P.x, P.y);
     switch (a.state) {
       case 'wander':
@@ -172,7 +173,7 @@ const Actors = {
           if (this.adjacent(a, P.x, P.y)) {
             game.hitPlayer(1, 'dog', a);
           }
-          a.cool = 45; a.state = 'chase'; a.t = 0;
+          a.cool = game.diff === 'hard' ? 32 : 45; a.state = 'chase'; a.t = 0;
         }
         break;
       case 'flee':
