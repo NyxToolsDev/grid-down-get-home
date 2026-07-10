@@ -831,7 +831,6 @@ const Game = {
         this.noise();
         this.toast(DIALOG.toasts.noise || 'THE SOUND CARRIES.');
       }
-      st.opened[key] = 1;
       let table = t.ent.table;
       if (st.screen === 'INT_PHARMACY' && table === 'shelf') table = 'shelf_med';
       const roll = this.hashRng(st.seed + key)();
@@ -839,8 +838,14 @@ const Game = {
       const total = tab.reduce((s, e) => s + e[0], 0);
       let acc = 0, found = null;
       for (const [w, id] of tab) { acc += w; if (roll * total < acc) { found = id; break; } }
-      if (found) this.grantItem(found);
-      else this.toast('NOTHING USEFUL.');
+      if (found) {
+        // pack full: leave the container unsearched so it can be tried again --
+        // the roll is seeded per container, so the same item waits
+        if (!this.grantItem(found)) { this.toast('IT STAYS PUT.'); return; }
+      } else {
+        this.toast('NOTHING USEFUL.');
+      }
+      st.opened[key] = 1;
     });
   },
 
@@ -1058,6 +1063,7 @@ const Game = {
     const st = this.st;
     const def = ITEMS.defs[id];
     if (!this.hasInv(id)) return;
+    if (def.kind !== 'consumable') return;
     if (id === 'can') {
       if (this.hasKey('opener')) { st.meters.f = Math.min(100, st.meters.f + 35); }
       else if (this.hasKey('crowbar')) { st.meters.f = Math.min(100, st.meters.f + 17); this.toast('SPILLED HALF.'); }
@@ -1448,7 +1454,7 @@ const Game = {
           this.st.bSlot = it.id;
           GAudio.sfx('confirm');
           this.toast('B: ' + def.name);
-        } else if (!it.key) {
+        } else if (!it.key && def.kind === 'consumable') {
           this.consume(it.id);
         } else {
           this.toast(DIALOG.toasts[it.id] || def.name);
@@ -1897,20 +1903,28 @@ const Game = {
       const items = this.menuItems();
       R.text('SLOTS ' + st.inv.length + '/' + st.invMax, 8, 16, true);
       if (st.bSlot) R.text('B: ' + ITEMS.defs[st.bSlot].name.slice(0, 12), 8, 26, true);
-      items.slice(0, 9).forEach((it, i) => {
+      const VIS = 7;
+      const first = Math.max(0, Math.min(m.idx - 3, items.length - VIS));
+      items.slice(first, first + VIS).forEach((it, i) => {
         const y = 40 + i * 11;
-        if (i === m.idx) R.text('>', 4, y, true);
+        if (first + i === m.idx) R.text('>', 4, y, true);
         R.draw('item_' + it.id, 14, y, {});
         R.text((it.key ? '*' : '') + ITEMS.defs[it.id].name.slice(0, 14), 26, y, true);
         if (st.bSlot === it.id) R.text('B', 148, y, true);
       });
+      if (items.length > VIS) {
+        R.fillAbs(157, 40, 2, VIS * 11, 1);
+        const th = Math.max(6, Math.floor(VIS * 11 * VIS / items.length));
+        const ty = 40 + Math.floor((VIS * 11 - th) * first / Math.max(1, items.length - VIS));
+        R.fillAbs(157, ty, 2, th, 3);
+      }
       if (!items.length) R.textCenter('EMPTY POCKETS', 70, true);
       const sel = items[m.idx];
       if (sel) {
         const d = ITEMS.defs[sel.id];
         let use = 'A: INFO';
         if (d.equip) use = st.bSlot === sel.id ? 'EQUIPPED ON B' : 'A: EQUIP TO B';
-        else if (!sel.key) use = 'A: USE NOW';
+        else if (!sel.key && d.kind === 'consumable') use = 'A: USE NOW';
         R.text(use, 8, 120, true);
       }
     } else if (m.page === 1) {
