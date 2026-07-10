@@ -83,6 +83,12 @@ const Game = {
 
   layout() {
     const touch = matchMedia('(pointer: coarse)').matches;
+    this.touchUI = touch;
+    // every UI string that names a button goes through this map so keyboard
+    // players see their real keys instead of the touch-deck labels
+    this.KEY = touch
+      ? { a: 'A', b: 'B', start: 'START', move: 'D-PAD' }
+      : { a: 'Z', b: 'X', start: 'ENTER', move: 'ARROW KEYS' };
     const deck = document.getElementById('deck');
     const availH = touch ? window.innerHeight * 0.58 : window.innerHeight - 16;
     const scale = Math.max(1, Math.floor(Math.min(window.innerWidth / R.W, availH / R.H)));
@@ -141,8 +147,8 @@ const Game = {
     this.deathCause = null;
     this.showCard(DIALOG.cards.card_open_1, () => {
       this.showCard(DIALOG.cards.card_open_2, () => {
-        this.showCard(['MOVE: D-PAD.', 'A: TALK, SEARCH,', 'AND SWING.'], () => {
-          this.showCard(['START: MENU WITH', 'PACK, MAP, HELP.', 'HOME IS EAST.'], () => {
+        this.showCard(['MOVE: ' + this.KEY.move + '.', this.KEY.a + ': TALK, SEARCH,', 'AND SWING.'], () => {
+          this.showCard([this.KEY.start + ': MENU WITH', 'PACK, MAP, HELP.', 'HOME IS EAST.'], () => {
             const go = () => {
               this.grantKey('photo');
               this.enterScreen('INT_OFFICE', 4, 4, true);
@@ -199,7 +205,7 @@ const Game = {
     if (id === 'photo') this.st.flags.photo_have = true;
     if (id === 'insulin') this.st.flags.insulin_have = true;
     this.toast((DIALOG.toasts[id] || ITEMS.defs[id].name));
-    if (id === 'insulin' || id === 'letter') this.toast('NEW TASK. SEE START MENU.');
+    if (id === 'insulin' || id === 'letter') this.toast('NEW TASK. MENU: ' + this.KEY.start + '.');
     GAudio.sfx('item');
     Input.vibrate(50);
   },
@@ -234,7 +240,7 @@ const Game = {
     if (scObj && scObj.name) this.banner = { text: scObj.name, t: 120 };
     if (!id.startsWith('INT') && !st.flags.hint_world) {
       st.flags.hint_world = true;
-      this.showCard(['HOME IS 38 MILES', 'EAST. FOLLOW THE', 'ROADS. MAP: START.'], null);
+      this.showCard(['HOME IS 38 MILES', 'EAST. FOLLOW THE', 'ROADS. MAP: ' + this.KEY.start + '.'], null);
     }
     this.actors = Actors.spawnForScreen(st, id, this.gameApi());
     if (id === 'INT_HOME' && st.day >= 9) this.actors = [];
@@ -460,13 +466,13 @@ const Game = {
     if (!st.flags.hint_search && !this.moving) {
       const cue = this.interactTarget();
       if (cue && cue.kind === 'box') {
-        this.hint('hint_search', ['THE ! OVER YOUR', 'HEAD MEANS PRESS', 'A HERE. SEARCH.'],
+        this.hint('hint_search', ['THE ! OVER YOUR', 'HEAD MEANS PRESS', this.KEY.a + ' HERE. SEARCH.'],
           st.diff === 'easy' ? ['SEARCHED SPOTS GET', 'A MARK. EMPTY IS', 'EMPTY FOR GOOD.'] : null);
         return;
       }
     }
     if (!st.flags.hint_meters && Survival.conditions(st).length) {
-      this.hint('hint_meters', ['A METER IS LOW.', 'USE ITEMS IN YOUR', 'PACK (START).'],
+      this.hint('hint_meters', ['A METER IS LOW.', 'USE ITEMS IN YOUR', 'PACK (' + this.KEY.start + ').'],
         st.diff === 'easy' ? ['EAT AND DRINK AT', 'RED. COLD NEEDS', 'FIRE OR SHELTER.'] : null);
       return;
     }
@@ -486,7 +492,7 @@ const Game = {
       if (threat) {
         st.flags.dog_hint = true;
         this.showCard(['A STRAY DOG.', 'JERKY CALMS IT.', 'A STICK ROUTS IT.'], () => {
-          this.showCard(['EQUIP STICK: START', '> PACK > STICK.', 'THEN A/B SWINGS.'], null);
+          this.showCard(['EQUIP STICK: ' + this.KEY.start, '> PACK > STICK.', 'THEN ' + this.KEY.a + '/' + this.KEY.b + ' SWINGS.'], null);
         });
         return;
       }
@@ -545,7 +551,7 @@ const Game = {
       GAudio.sfx('hurt');
     } else if (ev.type === 'dusk') {
       this.hint('hint_night', ['DUSK. NIGHTS GET', 'COLD FAST. FIND', 'A BED OR A FIRE.'],
-        this.st.diff === 'easy' ? ['SLEEP: FACE A BED', 'OR CAR, PRESS A.', 'FIRES NEED MATCHES.'] : null);
+        this.st.diff === 'easy' ? ['SLEEP: FACE A BED', 'OR CAR, PRESS ' + this.KEY.a + '.', 'FIRES NEED MATCHES.'] : null);
     }
   },
 
@@ -659,7 +665,7 @@ const Game = {
           this.grantItem('stick');
           this.grantItem('bottle');
           st.flags.bag_have = true;
-          this.hint('hint_stick', ['A STICK IS IN THE', 'BAG. OPEN PACK,', 'PRESS A: EQUIP B.']);
+          this.hint('hint_stick', ['A STICK IS IN THE', 'BAG. OPEN PACK,', 'PRESS ' + this.KEY.a + ': EQUIP ' + this.KEY.b + '.']);
         }
       }
     });
@@ -784,7 +790,7 @@ const Game = {
     const st = this.st;
     if (s.flags) {
       if (QUEST_START_FLAGS.some((f) => s.flags[f] && !st.flags[f])) {
-        this.toast('NEW TASK. SEE START MENU.');
+        this.toast('NEW TASK. MENU: ' + this.KEY.start + '.');
       }
       Object.assign(st.flags, s.flags);
     }
@@ -809,7 +815,7 @@ const Game = {
         opts.push({ label: 'CAN FOR THE POT', cb: () => {
           this.removeInv('can');
           st.soupCans = (st.soupCans || 0) + 1;
-          if (!st.flags.pot_asked) { st.flags.pot_asked = true; this.toast('NEW TASK. SEE START MENU.'); }
+          if (!st.flags.pot_asked) { st.flags.pot_asked = true; this.toast('NEW TASK. MENU: ' + this.KEY.start + '.'); }
           GAudio.sfx('confirm');
           if (st.soupCans >= 3) {
             st.flags.pot_filled = true;
@@ -1039,7 +1045,7 @@ const Game = {
   useB() {
     const st = this.st;
     const id = st.bSlot;
-    if (!id) { this.toast('B IS EMPTY. EQUIP IN PACK.'); return; }
+    if (!id) { this.toast(this.KEY.b + ' IS EMPTY. EQUIP IN PACK.'); return; }
     const def = ITEMS.defs[id];
     if (def.weapon) { this.swing(def); return; }
     if (def.light) {
@@ -1540,7 +1546,7 @@ const Game = {
         if (def.equip) {
           this.st.bSlot = it.id;
           GAudio.sfx('confirm');
-          this.toast('B: ' + def.name);
+          this.toast(this.KEY.b + ': ' + def.name);
         } else if (!it.key && def.kind === 'consumable') {
           this.consume(it.id);
         } else {
@@ -1736,7 +1742,7 @@ const Game = {
         : m === 'hard' ? 'SCARCE, MEAN, AND FAST.' : 'THE INTENDED WALK.';
       this.wrapN(blurb, 19).slice(0, 3).forEach((l, i) => R.text(l, 4, 112 + i * 10, true));
     } else {
-      R.text('B-BACK  A-PICK', 4, 122, true);
+      R.text(this.KEY.b + '-BACK  ' + this.KEY.a + '-PICK', 4, 122, true);
     }
   },
 
@@ -1747,7 +1753,7 @@ const Game = {
     (lines || []).forEach((l) => this.wrapN(l, 18).forEach((w) => out.push(w)));
     const top = Math.max(32, 56 - (out.length - 3) * 6);
     out.slice(0, 6).forEach((l, i) => R.textCenter(l, top + i * 12, true));
-    if (this.frame % 60 < 40) R.textCenter('A', 128, true);
+    if (this.frame % 60 < 40) R.textCenter(this.KEY.a, 128, true);
   },
 
   drawReport() {
@@ -1759,8 +1765,8 @@ const Game = {
       R.text(r[1], 152 - r[1].length * 8, 26 + i * 11, true);
     });
     if (this.st && this.st.ironWalk) R.textCenter('IRON WALK', 106, true);
-    if (this.report.won) R.textCenter('B: PLAY GRID DOWN', 118, true);
-    R.textCenter('A: TITLE', 130, true);
+    if (this.report.won) R.textCenter(this.KEY.b + ': PLAY GRID DOWN', 118, true);
+    R.textCenter(this.KEY.a + ': TITLE', 130, true);
   },
 
   drawTransition() {
@@ -1931,7 +1937,7 @@ const Game = {
     }
     // equipped B item
     if (st.bSlot) {
-      R.text('B', 37, 1, true);
+      R.text(this.KEY.b, 37, 1, true);
       R.draw('item_' + st.bSlot, 46, 1, {});
     }
     // phase + day
@@ -2000,7 +2006,7 @@ const Game = {
     if (m.page === 0) {
       const items = this.menuItems();
       R.text('SLOTS ' + st.inv.length + '/' + st.invMax, 8, 16, true);
-      if (st.bSlot) R.text('B: ' + ITEMS.defs[st.bSlot].name.slice(0, 12), 8, 26, true);
+      if (st.bSlot) R.text(this.KEY.b + ': ' + ITEMS.defs[st.bSlot].name.slice(0, 12), 8, 26, true);
       const VIS = 7;
       const first = Math.max(0, Math.min(m.idx - 3, items.length - VIS));
       items.slice(first, first + VIS).forEach((it, i) => {
@@ -2008,7 +2014,7 @@ const Game = {
         if (first + i === m.idx) R.text('>', 4, y, true);
         R.draw('item_' + it.id, 14, y, {});
         R.text((it.key ? '*' : '') + ITEMS.defs[it.id].name.slice(0, 14), 26, y, true);
-        if (st.bSlot === it.id) R.text('B', 148, y, true);
+        if (st.bSlot === it.id) R.text(this.KEY.b, 148, y, true);
       });
       if (items.length > VIS) {
         R.fillAbs(157, 40, 2, VIS * 11, 1);
@@ -2020,9 +2026,9 @@ const Game = {
       const sel = items[m.idx];
       if (sel) {
         const d = ITEMS.defs[sel.id];
-        let use = 'A: INFO';
-        if (d.equip) use = st.bSlot === sel.id ? 'EQUIPPED ON B' : 'A: EQUIP TO B';
-        else if (!sel.key && d.kind === 'consumable') use = 'A: USE NOW';
+        let use = this.KEY.a + ': INFO';
+        if (d.equip) use = st.bSlot === sel.id ? 'EQUIPPED ON ' + this.KEY.b : this.KEY.a + ': EQUIP TO ' + this.KEY.b;
+        else if (!sel.key && d.kind === 'consumable') use = this.KEY.a + ': USE NOW';
         R.text(use, 8, 120, true);
       }
     } else if (m.page === 1) {
@@ -2080,19 +2086,20 @@ const Game = {
         R.text(o, 24, y, true);
       });
     } else {
+      const K = this.KEY;
       const lines = [
-        'A: TALK SEARCH HIT',
-        'B: USE EQUIPPED',
-        'START: THIS MENU',
+        K.a + ': TALK SEARCH HIT',
+        K.b + ': USE EQUIPPED',
+        K.start + ': THIS MENU',
         'EQUIP: PACK, THEN',
-        'A ON A TOOL.',
+        K.a + ' ON A TOOL.',
         'TASKS: WHAT FOLKS',
         'ASKED OF YOU.',
         'HOME IS FAR EAST.',
       ];
       lines.forEach((l, i) => R.text(l, 8, 20 + i * 12, true));
     }
-    R.text('START: CLOSE', 36, 132, true);
+    R.text(this.KEY.start + ': CLOSE', 36, 132, true);
   },
 };
 
