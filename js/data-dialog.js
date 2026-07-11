@@ -446,7 +446,8 @@ const DIALOG = /*JSON*/{
       "lines": [
         ["THE GRID IS STILL", "DOWN. THE FAMILY", "COUNTS EVERY CAN."],
         ["THEIR 30 DAYS", "START NOW."],
-        ["PLAY GRID DOWN."]
+        ["AND IN A CONTROL", "ROOM, SOMEONE", "FIGHTS TO END IT."],
+        ["PLAY GRID DOWN.", "PLAY BLACK START."]
       ]
     }
   },

@@ -1675,7 +1675,11 @@ const Game = {
       try { window.open('https://nyxtoolsdev.github.io/grid-down-game/', '_blank'); } catch (e) { /* ignore */ }
       return;
     }
-    if (Input.pressed('a') || Input.pressed('start')) {
+    if (this.report.won && Input.pressed('start')) {
+      try { window.open('https://nyxtoolsdev.github.io/grid-down-black-start/', '_blank'); } catch (e) { /* ignore */ }
+      return;
+    }
+    if (Input.pressed('a') || (!this.report.won && Input.pressed('start'))) {
       this.report = null;
       this.openTitle();
     }
@@ -1766,6 +1770,7 @@ const Game = {
     });
     if (this.st && this.st.ironWalk) R.textCenter('IRON WALK', 106, true);
     if (this.report.won) R.textCenter(this.KEY.b + ': PLAY GRID DOWN', 118, true);
+    if (this.report.won) R.textCenter(this.KEY.start + ': BLACK START', 128, true);
     R.textCenter(this.KEY.a + ': TITLE', 130, true);
   },
 
