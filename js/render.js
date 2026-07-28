@@ -1,22 +1,82 @@
-// Renderer: builds palette-ramped atlases from pixel-string data at boot,
-// draws tiles/sprites/text to a 160x144 canvas. Integer-scaled via CSS.
+// Renderer: builds GBC-style palette-grouped atlases from pixel-string data at
+// boot, draws tiles/sprites/text to a 160x144 canvas. Integer-scaled via CSS.
+// Art stays 4-index; color comes from each element's palette group, with
+// day/dusk/night variants computed per group (night shifts dark blue).
 const R = {
   W: 160,
   H: 144,
-  PAL: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f'],
-  RGBA: [[15, 56, 15, 255], [48, 98, 48, 255], [139, 172, 15, 255], [155, 188, 15, 255]],
-  RAMPS: [[0, 1, 2, 3], [0, 1, 2, 2], [0, 0, 1, 2]], // DAY, DUSK, NIGHT
+  // neutral UI palette (menus, HUD chrome, boxes): dark -> light
+  PAL: ['#101820', '#3c5064', '#8ca4b4', '#f8f4e4'],
+  // palette groups: 4 shades dark -> light (day colors)
+  PALS: {
+    veg:    ['#0c380c', '#227424', '#54ac38', '#a0d858'],
+    ground: ['#4c3014', '#8a5c2c', '#c49458', '#ecd0a0'],
+    pave:   ['#282830', '#606068', '#a0a0a8', '#d8d8dc'],
+    water:  ['#0c2870', '#1c54c0', '#4894e8', '#a0d4f8'],
+    brick:  ['#481410', '#98342c', '#d07048', '#f0b888'],
+    wood:   ['#3c2410', '#7c4c24', '#b48454', '#e4c494'],
+    metal:  ['#1c2028', '#4c5460', '#8c96a4', '#ccd4dc'],
+    fire:   ['#401000', '#a83810', '#f08020', '#f8d858'],
+    hero:   ['#201824', '#c03028', '#eca070', '#f8f0e4'],
+    dog:    ['#281408', '#6c4018', '#a87840', '#e0c088'],
+    folk:   ['#1c1c2c', '#3060a8', '#eca070', '#f0f0f0'],
+    red:    ['#480810', '#c01830', '#f05858', '#f8ccc8'],
+    gold:   ['#443008', '#a87c14', '#e0b02c', '#f8ec90'],
+  },
+  // day / dusk / night channel multipliers
+  LIGHT: [[1, 1, 1], [0.8, 0.62, 0.68], [0.38, 0.44, 0.75]],
   ramp: 0,
 
   canvas: null,
   ctx: null,
-  atlas: [],       // one canvas per ramp
+  atlas: [],       // one canvas per light ramp
   rects: {},       // name -> {x, y, w, h}
-  fontDark: null,  // ink P0 (for light boxes)
-  fontLight: null, // ink P3 (for dark strips)
+  fontDark: null,  // ink (for light boxes)
+  fontLight: null, // paper (for dark strips)
   fontIdx: {},
   ditherTile: null,
   ready: false,
+
+  GROUP: {
+    grass: 'veg', tallgrass: 'veg', tree: 'veg', icon_gut: 'veg',
+    dirt: 'ground', floor: 'ground', doorway: 'ground', cache: 'ground', plank: 'ground',
+    road: 'pave', road_line: 'pave', sidewalk: 'pave', rail: 'pave', debris: 'pave',
+    glasshaz: 'pave', wire: 'pave',
+    water: 'water', icon_drop: 'water', icon_cold: 'water',
+    brick: 'brick', brick_window: 'brick', vending: 'brick', boxcar: 'brick', floor_rug: 'brick',
+    wood: 'wood', wood_window: 'wood', door: 'wood', boarded: 'wood', fence: 'wood',
+    shelf: 'wood', desk: 'wood', counter: 'wood', sign: 'wood', firepit: 'wood', gap: 'wood',
+    gate: 'metal', pump: 'metal', car_l: 'metal', car_r: 'metal', dumpster: 'metal',
+    glassdoor: 'metal', bed: 'metal', searched: 'metal', icon_arrow: 'metal', icon_moon: 'metal',
+    firepit_lit: 'fire', icon_flame: 'fire',
+    icon_sun: 'gold', icon_can: 'gold', icon_bolt: 'gold',
+    zzz: 'folk',
+    alert_bang: 'red', icon_bleed: 'red', icon_dot: 'red',
+    heart_full: 'red', heart_half: 'red', heart_empty: 'red',
+  },
+
+  groupFor(name) {
+    if (this.GROUP[name]) return this.GROUP[name];
+    if (name.startsWith('player_')) return 'hero';
+    if (name.startsWith('dog_')) return 'dog';
+    if (name.startsWith('npc_') || name.startsWith('human_')) return 'folk';
+    if (name.startsWith('item_')) return 'gold';
+    return 'ground';
+  },
+
+  hexToRgb(h) {
+    return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  },
+
+  lit(rgb, rampIdx) {
+    const m = this.LIGHT[rampIdx];
+    return [Math.round(rgb[0] * m[0]), Math.round(rgb[1] * m[1]), Math.round(rgb[2] * m[2])];
+  },
+
+  litCss(hex, rampIdx) {
+    const c = this.lit(this.hexToRgb(hex), rampIdx == null ? this.ramp : rampIdx);
+    return 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+  },
 
   init(canvas) {
     this.canvas = canvas;
@@ -42,7 +102,7 @@ const R = {
     const COLS = 16;
     const CELL = 16;
     const rows = Math.ceil(list.length / COLS);
-    this.atlas = this.RAMPS.map(() => {
+    this.atlas = this.LIGHT.map(() => {
       const c = document.createElement('canvas');
       c.width = COLS * CELL;
       c.height = rows * CELL;
@@ -52,13 +112,14 @@ const R = {
       const ax = (i % COLS) * CELL;
       const ay = Math.floor(i / COLS) * CELL;
       this.rects[name] = { x: ax, y: ay, w: size, h: size };
-      this.RAMPS.forEach((ramp, ri) => {
+      const pal = this.PALS[this.groupFor(name)].map((h) => this.hexToRgb(h));
+      this.LIGHT.forEach((mult, ri) => {
         const ctx = this.atlas[ri].getContext('2d');
         const img = ctx.createImageData(size, size);
         for (let p = 0; p < str.length; p++) {
           const ch = str[p];
           if (ch === '.') continue;
-          const shade = this.RGBA[ramp[+ch]];
+          const shade = this.lit(pal[+ch], ri);
           const o = p * 4;
           img.data[o] = shade[0]; img.data[o + 1] = shade[1];
           img.data[o + 2] = shade[2]; img.data[o + 3] = 255;
@@ -91,8 +152,8 @@ const R = {
       ctx.putImageData(img, 0, 0);
       return c;
     };
-    this.fontDark = make(this.RGBA[0]);
-    this.fontLight = make(this.RGBA[3]);
+    this.fontDark = make(this.hexToRgb('#182028'));
+    this.fontLight = make(this.hexToRgb('#f8f4e4'));
   },
 
   buildDither() {
@@ -144,8 +205,7 @@ const R = {
   },
 
   fill(x, y, w, h, shade) {
-    this.ctx.fillStyle = this.PAL[this.RAMPS[this.ramp][shade]];
-    this.ctx.fillRect(x, y, w, h);
+    this.fillAbs(x, y, w, h, shade);
   },
 
   fillAbs(x, y, w, h, shade) {
@@ -153,12 +213,19 @@ const R = {
     this.ctx.fillRect(x, y, w, h);
   },
 
-  // text box frame (light bg, dark 1px border)
+  fillHex(x, y, w, h, hex) {
+    this.ctx.fillStyle = hex;
+    this.ctx.fillRect(x, y, w, h);
+  },
+
+  // text box frame (paper bg, ink border with inner accent line)
   box(x, y, w, h) {
     this.fillAbs(x, y, w, h, 3);
     this.ctx.strokeStyle = this.PAL[0];
     this.ctx.lineWidth = 1;
     this.ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    this.ctx.strokeStyle = this.PAL[2];
+    this.ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
   },
 
   // vision dither: hide tiles beyond radius (tile units) from player center
@@ -180,7 +247,7 @@ const R = {
 
   rain(frame) {
     const ctx = this.ctx;
-    ctx.fillStyle = this.PAL[this.RAMPS[this.ramp][1]];
+    ctx.fillStyle = this.litCss(this.PALS.water[2]);
     const ph = frame % 2;
     for (let i = 0; i < 28; i++) {
       const x = (i * 37 + (frame >> 1) * 3) % 168 - 4;
@@ -192,11 +259,11 @@ const R = {
   frost(frame) {
     // sparse light dots over outdoor ground during dawn frost
     const ctx = this.ctx;
-    ctx.fillStyle = this.PAL[this.RAMPS[this.ramp][3]];
+    ctx.fillStyle = this.litCss('#e8f4f8');
     for (let i = 0; i < 40; i++) {
       const x = (i * 41) % 160;
-      const y = ((i * 67) % 128) + 16;
-      ctx.fillRect(x, y, 1, 1);
+      const y = ((i * 67) % 128) + 1;
+      ctx.fillRect(x, y + 15, 1, 1);
     }
   },
 };

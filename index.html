@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0f380f">
+<meta name="theme-color" content="#101820">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,7 +16,7 @@
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     height: 100%;
-    background: #0f380f;
+    background: #101820;
     overflow: hidden;
     touch-action: none;
     overscroll-behavior: none;
@@ -30,11 +30,11 @@
     font-family: monospace;
     padding-top: env(safe-area-inset-top);
   }
-  #err { color: #9bbc0f; font-size: 14px; padding: 4px; }
+  #err { color: #f8f4e4; font-size: 14px; padding: 4px; }
   #screen {
     image-rendering: pixelated;
     image-rendering: crisp-edges;
-    background: #0f380f;
+    background: #101820;
     margin-top: 4px;
     flex-shrink: 0;
   }
@@ -52,30 +52,39 @@
     width: 55%;
     touch-action: none;
   }
-  #dpadGfx {
+  #dpad {
     position: absolute;
-    width: 96px; height: 96px;
-    margin-left: -48px; margin-top: -48px;
-    opacity: 0;
+    left: 18px; top: 50%;
+    width: 132px; height: 132px;
+    margin-top: -66px;
+    opacity: 0.55;
     pointer-events: none;
     transition: opacity 0.1s;
   }
-  #dpadGfx.on { opacity: 0.5; }
-  #dpadGfx::before, #dpadGfx::after {
-    content: '';
+  #dpad.on { opacity: 0.95; }
+  .dbar {
     position: absolute;
-    background: #306230;
-    border: 2px solid #8bac0f;
-    border-radius: 6px;
+    background: #26303c;
+    border: 2px solid #8ca4b4;
+    border-radius: 10px;
   }
-  #dpadGfx::before { left: 33px; top: 0; width: 30px; height: 96px; }
-  #dpadGfx::after { left: 0; top: 33px; width: 96px; height: 30px; }
+  .dbar.v { left: 45px; top: 0; width: 42px; height: 132px; }
+  .dbar.h { left: 0; top: 45px; width: 132px; height: 42px; }
+  .darm { position: absolute; width: 0; height: 0; border: 10px solid transparent; }
+  .darm.up    { left: 56px; top: 10px; border-bottom: 14px solid #8ca4b4; border-top: 0; }
+  .darm.down  { left: 56px; bottom: 10px; border-top: 14px solid #8ca4b4; border-bottom: 0; }
+  .darm.left  { left: 10px; top: 56px; border-right: 14px solid #8ca4b4; border-left: 0; }
+  .darm.right { right: 10px; top: 56px; border-left: 14px solid #8ca4b4; border-right: 0; }
+  #dpad.dir-up .darm.up { border-bottom-color: #f05858; }
+  #dpad.dir-down .darm.down { border-top-color: #f05858; }
+  #dpad.dir-left .darm.left { border-right-color: #f05858; }
+  #dpad.dir-right .darm.right { border-left-color: #f05858; }
   .btn {
     position: absolute;
     border-radius: 50%;
-    background: #306230;
-    border: 3px solid #8bac0f;
-    color: #9bbc0f;
+    background: #26303c;
+    border: 3px solid #8ca4b4;
+    color: #f8f4e4;
     font-size: 22px;
     font-weight: bold;
     display: flex;
@@ -83,7 +92,7 @@
     justify-content: center;
     touch-action: none;
   }
-  .btn.on { background: #8bac0f; color: #0f380f; }
+  .btn.on { background: #c03028; color: #f8f4e4; }
   #btnA { right: 18px; top: 22%; width: 76px; height: 76px; }
   #btnB { right: 104px; top: 45%; width: 64px; height: 64px; }
   #btnStart {
@@ -99,7 +108,16 @@
 <div id="err"></div>
 <canvas id="screen" width="160" height="144"></canvas>
 <div id="deck">
-  <div id="dpadZone"><div id="dpadGfx"></div></div>
+  <div id="dpadZone">
+    <div id="dpad">
+      <div class="dbar v"></div>
+      <div class="dbar h"></div>
+      <div class="darm up"></div>
+      <div class="darm down"></div>
+      <div class="darm left"></div>
+      <div class="darm right"></div>
+    </div>
+  </div>
   <div class="btn" id="btnA">A</div>
   <div class="btn" id="btnB">B</div>
   <div class="btn" id="btnStart">START</div>

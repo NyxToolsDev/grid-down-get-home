@@ -1,13 +1,14 @@
-// Input: keyboard + multi-touch (floating-origin D-pad, A/B/START buttons).
-// Direction uses axis priority with 1.2x hysteresis to avoid diagonal jitter.
+// Input: keyboard + multi-touch (fixed visible D-pad, A/B/START buttons).
+// Direction is measured from the pad's center with axis priority and 1.2x
+// hysteresis to avoid diagonal jitter; the active arm lights up.
 const Input = {
   held: { up: false, down: false, left: false, right: false, a: false, b: false, start: false },
   just: {},
   dpadPointer: null,
-  dpadOrigin: null,
+  padEl: null,
   touchDir: null,
   buttonPointers: {},
-  DEAD: 12,
+  DEAD: 14,
   HYST: 1.2,
 
   init() {
@@ -33,46 +34,45 @@ const Input = {
     });
 
     const dpad = document.getElementById('dpadZone');
-    const gfx = document.getElementById('dpadGfx');
+    const pad = document.getElementById('dpad');
+    this.padEl = pad;
     if (dpad) {
+      const dirFrom = (x, y) => {
+        const r = pad.getBoundingClientRect();
+        const dx = x - (r.left + r.width / 2);
+        const dy = y - (r.top + r.height / 2);
+        const ax = Math.abs(dx), ay = Math.abs(dy);
+        if (ax < this.DEAD && ay < this.DEAD) return null;
+        let dir = this.touchDir;
+        if (dir === 'left' || dir === 'right') {
+          if (ay > ax * this.HYST) dir = dy < 0 ? 'up' : 'down';
+          else dir = dx < 0 ? 'left' : 'right';
+        } else if (dir === 'up' || dir === 'down') {
+          if (ax > ay * this.HYST) dir = dx < 0 ? 'left' : 'right';
+          else dir = dy < 0 ? 'up' : 'down';
+        } else {
+          dir = ax >= ay ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
+        }
+        return dir;
+      };
       dpad.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         GAudio.init(); GAudio.resume();
         if (this.dpadPointer !== null) return;
         this.dpadPointer = e.pointerId;
-        this.dpadOrigin = [e.clientX, e.clientY];
         dpad.setPointerCapture(e.pointerId);
-        if (gfx) {
-          const r = dpad.getBoundingClientRect();
-          gfx.style.left = (e.clientX - r.left) + 'px';
-          gfx.style.top = (e.clientY - r.top) + 'px';
-          gfx.classList.add('on');
-        }
+        if (pad) pad.classList.add('on');
+        this.setTouchDir(dirFrom(e.clientX, e.clientY));
       });
       dpad.addEventListener('pointermove', (e) => {
         if (e.pointerId !== this.dpadPointer) return;
-        const dx = e.clientX - this.dpadOrigin[0];
-        const dy = e.clientY - this.dpadOrigin[1];
-        const ax = Math.abs(dx), ay = Math.abs(dy);
-        let dir = this.touchDir;
-        if (ax < this.DEAD && ay < this.DEAD) {
-          dir = null;
-        } else if (dir === 'left' || dir === 'right') {
-          if (ay > ax * this.HYST) dir = dy < 0 ? 'up' : 'down';
-          else if (ax >= this.DEAD) dir = dx < 0 ? 'left' : 'right';
-        } else if (dir === 'up' || dir === 'down') {
-          if (ax > ay * this.HYST) dir = dx < 0 ? 'left' : 'right';
-          else if (ay >= this.DEAD) dir = dy < 0 ? 'up' : 'down';
-        } else {
-          dir = ax >= ay ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
-        }
-        this.setTouchDir(dir);
+        this.setTouchDir(dirFrom(e.clientX, e.clientY));
       });
       const end = (e) => {
         if (e.pointerId !== this.dpadPointer) return;
         this.dpadPointer = null;
         this.setTouchDir(null);
-        if (gfx) gfx.classList.remove('on');
+        if (pad) pad.classList.remove('on');
       };
       dpad.addEventListener('pointerup', end);
       dpad.addEventListener('pointercancel', end);
@@ -107,6 +107,10 @@ const Input = {
       if (this.touchDir === d) this.held[d] = false;
     }
     this.touchDir = dir;
+    if (this.padEl) {
+      this.padEl.classList.remove('dir-up', 'dir-down', 'dir-left', 'dir-right');
+      if (dir) this.padEl.classList.add('dir-' + dir);
+    }
     if (dir) {
       if (!this.held[dir]) this.just[dir] = true;
       this.held[dir] = true;

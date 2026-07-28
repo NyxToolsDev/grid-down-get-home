@@ -1,5 +1,18 @@
 // Grid Down: Get Home — boot, fixed-timestep loop, mode state machine,
 // player control, interactions, scripted encounters, HUD, menus, endings.
+
+// Side-quest registry for the TASKS menu page. active/mid/done are condOk
+// conditions; mid is the halfway state (found it, now report back).
+const QUESTS = [
+  { name: 'INSULIN TO FARM', active: { flag: 'insulin_have' }, done: { flag: 'insulin_delivered' } },
+  { name: 'FIND BISCUIT', active: { flag: 'biscuit_missing' }, mid: { flag: 'biscuit_found' }, midName: 'BISCUIT: TELL THEO', done: { flag: 'biscuit_returned' } },
+  { name: 'CANS FOR THE POT', active: { flag: 'pot_asked' }, done: { flag: 'pot_filled' }, nameFn: (st) => 'CANS FOR POT ' + Math.min(3, st.soupCans || 0) + '/3' },
+  { name: 'LETTER TO DEE', active: { item: 'letter' }, done: { flag: 'letter_delivered' } },
+  { name: 'WATER FOR MARTA', active: { flag: 'water_asked' }, done: { flag: 'marta_watered' } },
+  { name: 'LOOK IN ON WES', active: { flag: 'wes_asked' }, mid: { flag: 'wes_found' }, midName: 'TELL AMES RE WES', done: { flag: 'wes_told' } },
+];
+const QUEST_START_FLAGS = ['biscuit_missing', 'wes_asked', 'water_asked'];
+
 const Game = {
   mode: 'boot',
   st: null,
@@ -15,6 +28,7 @@ const Game = {
   toastQ: [], toastT: 0,
   trans: null,             // transition state
   menu: null,              // start menu state
+  banner: null,            // {text, t} location banner on screen entry
   title: null,
   busy: null,              // {t,total,then}
   swingT: 0, iframes: 0, stunT: 0,
@@ -69,6 +83,12 @@ const Game = {
 
   layout() {
     const touch = matchMedia('(pointer: coarse)').matches;
+    this.touchUI = touch;
+    // every UI string that names a button goes through this map so keyboard
+    // players see their real keys instead of the touch-deck labels
+    this.KEY = touch
+      ? { a: 'A', b: 'B', start: 'START', move: 'D-PAD' }
+      : { a: 'Z', b: 'X', start: 'ENTER', move: 'ARROW KEYS' };
     const deck = document.getElementById('deck');
     const availH = touch ? window.innerHeight * 0.58 : window.innerHeight - 16;
     const scale = Math.max(1, Math.floor(Math.min(window.innerWidth / R.W, availH / R.H)));
@@ -99,11 +119,11 @@ const Game = {
   },
 
   // ---------------------------------------------------------------- run state
-  newRun(loadoutId, secondWind, ironWalk) {
+  newRun(loadoutId, secondWind, ironWalk, diff) {
     const lo = ITEMS.loadouts[loadoutId];
     const st = {
       v: 1, seed: (Math.random() * 0xffffffff) >>> 0,
-      loadout: loadoutId, secondWind, ironWalk,
+      loadout: loadoutId, secondWind, ironWalk, diff: diff || 'normal',
       day: 1, clock: 977, gameSec: 0,
       screen: 'INT_OFFICE', px: 4, py: 4, facing: 'down',
       meters: { w: 70, f: 80, h: 100, e: 80 }, hearts: 8,
@@ -120,12 +140,25 @@ const Game = {
     };
     this.rngState = st.seed;
     this.st = st;
+    if (st.diff === 'hard') {
+      st.hearts = 6;
+      st.meters.w = 60; st.meters.f = 70; st.meters.e = 70;
+    }
     this.deathCause = null;
     this.showCard(DIALOG.cards.card_open_1, () => {
       this.showCard(DIALOG.cards.card_open_2, () => {
-        this.grantKey('photo');
-        this.enterScreen('INT_OFFICE', 4, 4, true);
-        this.mode = 'play';
+        this.showCard(['MOVE: ' + this.KEY.move + '.', this.KEY.a + ': TALK, SEARCH,', 'AND SWING.'], () => {
+          this.showCard([this.KEY.start + ': MENU WITH', 'PACK, MAP, HELP.', 'HOME IS EAST.'], () => {
+            const go = () => {
+              this.grantKey('photo');
+              this.enterScreen('INT_OFFICE', 4, 4, true);
+              this.mode = 'play';
+            };
+            if (st.diff === 'easy') {
+              this.showCard(['TOP BAR: HEARTS,', 'THEN WATER, FOOD,', 'WARMTH, ENERGY.'], go);
+            } else go();
+          });
+        });
       });
     });
   },
@@ -172,6 +205,7 @@ const Game = {
     if (id === 'photo') this.st.flags.photo_have = true;
     if (id === 'insulin') this.st.flags.insulin_have = true;
     this.toast((DIALOG.toasts[id] || ITEMS.defs[id].name));
+    if (id === 'insulin' || id === 'letter') this.toast('NEW TASK. MENU: ' + this.KEY.start + '.');
     GAudio.sfx('item');
     Input.vibrate(50);
   },
@@ -202,6 +236,12 @@ const Game = {
     st.flags.day2plus = st.day >= 2;
     const col = +id.slice(1) || 0;
     if (!id.startsWith('INT') && col >= 7) st.flags.crossed_river = true;
+    const scObj = MAPS.screens[id];
+    if (scObj && scObj.name) this.banner = { text: scObj.name, t: 120 };
+    if (!id.startsWith('INT') && !st.flags.hint_world) {
+      st.flags.hint_world = true;
+      this.showCard(['HOME IS 38 MILES', 'EAST. FOLLOW THE', 'ROADS. MAP: ' + this.KEY.start + '.'], null);
+    }
     this.actors = Actors.spawnForScreen(st, id, this.gameApi());
     if (id === 'INT_HOME' && st.day >= 9) this.actors = [];
     this.spawnDynamic(id);
@@ -299,6 +339,7 @@ const Game = {
     }
     if (this.toastT > 0) this.toastT--;
     else if (this.toastQ.length) { this.toastQ.shift(); if (this.toastQ.length) this.toastT = 90; }
+    if (this.banner && this.banner.t > 0) this.banner.t--;
   },
 
   // ---------------------------------------------------------------- title
@@ -333,7 +374,7 @@ const Game = {
         }
       } else if (sel === 'NEW WALK') {
         this.mode = 'loadout';
-        this.title = { idx: 0, sw: true, iron: false };
+        this.title = { idx: 0, sw: true, iron: false, diff: 'normal' };
       } else {
         this.meta.sound = !this.meta.sound;
         GAudio.setEnabled(this.meta.sound);
@@ -344,7 +385,7 @@ const Game = {
 
   updateLoadout() {
     const t = this.title;
-    const rows = 3 + 1 + (this.meta.won ? 1 : 0) + 1; // loadouts, second wind, iron?, start
+    const rows = 3 + 2 + (this.meta.won ? 1 : 0) + 1; // loadouts, mode, second wind, iron?, start
     if (Input.pressed('up')) { t.idx = (t.idx + rows - 1) % rows; GAudio.sfx('blip'); }
     if (Input.pressed('down')) { t.idx = (t.idx + 1) % rows; GAudio.sfx('blip'); }
     if (Input.pressed('b')) { this.openTitle(); return; }
@@ -353,12 +394,14 @@ const Game = {
       if (t.idx < 3) {
         t.pick = ['edc', 'gym', 'prepper'][t.idx];
       } else if (t.idx === 3) {
+        t.diff = t.diff === 'normal' ? 'easy' : t.diff === 'easy' ? 'hard' : 'normal';
+      } else if (t.idx === 4) {
         t.sw = !t.sw;
-      } else if (this.meta.won && t.idx === 4) {
+      } else if (this.meta.won && t.idx === 5) {
         t.iron = !t.iron;
       } else {
         if (Save.loadRun()) Save.clearRun();
-        this.newRun(t.pick || 'edc', t.sw, t.iron);
+        this.newRun(t.pick || 'edc', t.sw, t.iron, t.diff || 'normal');
       }
     }
   },
@@ -419,6 +462,21 @@ const Game = {
       if (dir) this.tryMove(dir);
     }
 
+    // one-time guidance
+    if (!st.flags.hint_search && !this.moving) {
+      const cue = this.interactTarget();
+      if (cue && cue.kind === 'box') {
+        this.hint('hint_search', ['THE ! OVER YOUR', 'HEAD MEANS PRESS', this.KEY.a + ' HERE. SEARCH.'],
+          st.diff === 'easy' ? ['SEARCHED SPOTS GET', 'A MARK. EMPTY IS', 'EMPTY FOR GOOD.'] : null);
+        return;
+      }
+    }
+    if (!st.flags.hint_meters && Survival.conditions(st).length) {
+      this.hint('hint_meters', ['A METER IS LOW.', 'USE ITEMS IN YOUR', 'PACK (' + this.KEY.start + ').'],
+        st.diff === 'easy' ? ['EAT AND DRINK AT', 'RED. COLD NEEDS', 'FIRE OR SHELTER.'] : null);
+      return;
+    }
+
     // interact / B-use
     if (Input.pressed('a')) this.interact();
     if (Input.pressed('b')) this.useB();
@@ -426,6 +484,19 @@ const Game = {
 
     // actors
     this.actors = Actors.update(this.actors, st, this.gameApi());
+
+    // first-dog onboarding
+    if (!st.flags.dog_hint) {
+      const threat = this.actors.find((a) => a.kind === 'dog' && !a.fed && !a.gone
+        && (a.state === 'alert' || a.state === 'chase'));
+      if (threat) {
+        st.flags.dog_hint = true;
+        this.showCard(['A STRAY DOG.', 'JERKY CALMS IT.', 'A STICK ROUTS IT.'], () => {
+          this.showCard(['EQUIP STICK: ' + this.KEY.start, '> PACK > STICK.', 'THEN ' + this.KEY.a + '/' + this.KEY.b + ' SWINGS.'], null);
+        });
+        return;
+      }
+    }
 
     // scripted checks
     this.tollCheck();
@@ -469,7 +540,8 @@ const Game = {
       this.collapse();
     } else if (ev.type === 'dawn') {
       // daily rolls
-      st.rainToday = st.day === 2 ? true : (st.day >= 4 ? this.rng() < 0.25 : false);
+      const rainP = st.diff === 'hard' ? 0.4 : st.diff === 'easy' ? 0.15 : 0.25;
+      st.rainToday = st.day === 2 ? true : (st.day >= 4 ? this.rng() < rainP : false);
       if (st.rainToday) st.flags.rain_today = true; else st.flags.rain_today = false;
       if (st.day === 4) this.showCard(DIALOG.cards.card_frost, null);
       else if (st.day === 2 && st.rainToday) this.showCard(DIALOG.cards.card_rain, null);
@@ -477,6 +549,9 @@ const Game = {
     } else if (ev.type === 'gutOnset') {
       this.toast('YOUR STOMACH TURNS.');
       GAudio.sfx('hurt');
+    } else if (ev.type === 'dusk') {
+      this.hint('hint_night', ['DUSK. NIGHTS GET', 'COLD FAST. FIND', 'A BED OR A FIRE.'],
+        this.st.diff === 'easy' ? ['SLEEP: FACE A BED', 'OR CAR, PRESS ' + this.KEY.a + '.', 'FIRES NEED MATCHES.'] : null);
     }
   },
 
@@ -590,6 +665,7 @@ const Game = {
           this.grantItem('stick');
           this.grantItem('bottle');
           st.flags.bag_have = true;
+          this.hint('hint_stick', ['A STICK IS IN THE', 'BAG. OPEN PACK,', 'PRESS ' + this.KEY.a + ': EQUIP ' + this.KEY.b + '.']);
         }
       }
     });
@@ -634,6 +710,18 @@ const Game = {
 
   interact() {
     const st = this.st;
+    // A also swings at a hostile in the facing tile (mobile-friendly combat)
+    const [hx, hy] = this.facingTile();
+    const hostile = this.actors.find((a) => !a.gone && a.x === hx && a.y === hy
+      && ((a.kind === 'dog' && !a.fed) || a.kind === 'shadower' || a.kind === 'prowler'
+        || (a.kind === 'npc' && a.hostile)));
+    if (hostile) {
+      const wdef = st.bSlot && ITEMS.defs[st.bSlot];
+      if (wdef && wdef.weapon) { this.swing(wdef); return; }
+      this.toast('NEED A WEAPON. CHECK YOUR PACK.');
+      GAudio.sfx('deny');
+      return;
+    }
     const t = this.interactTarget();
     if (!t) {
       // bedroll camp: interior floor, or outdoors beside a lit fire
@@ -700,23 +788,66 @@ const Game = {
 
   applySet(s) {
     const st = this.st;
-    if (s.flags) Object.assign(st.flags, s.flags);
+    if (s.flags) {
+      if (QUEST_START_FLAGS.some((f) => s.flags[f] && !st.flags[f])) {
+        this.toast('NEW TASK. MENU: ' + this.KEY.start + '.');
+      }
+      Object.assign(st.flags, s.flags);
+    }
     if (s.give) this.grantItem(s.give);
     if (s.karma) st.karma += s.karma;
+    if (s.takeKey) {
+      const i = st.keys.indexOf(s.takeKey);
+      if (i >= 0) st.keys.splice(i, 1);
+    }
+    if (s.intel && st.intel.indexOf(s.intel) < 0) st.intel.push(s.intel);
   },
 
   npcExtras(id, a) {
     const st = this.st;
     if (id === 'ames') {
       const opts = [];
-      if (st.clock >= 1080 && st.clock < 1140 && !st.flags.soup_today) {
+      const soupOpen = (st.clock >= 1080 && st.clock < 1140) || st.flags.pot_filled;
+      if (soupOpen && !st.flags.soup_today) {
         opts.push({ label: 'HAVE SOUP', cb: () => { st.meters.f = Math.min(100, st.meters.f + 60); st.flags.soup_today = true; GAudio.sfx('eat'); this.toast('WARM. REAL.'); } });
+      }
+      if (this.invCount('can') >= 1 && !st.flags.pot_filled) {
+        opts.push({ label: 'CAN FOR THE POT', cb: () => {
+          this.removeInv('can');
+          st.soupCans = (st.soupCans || 0) + 1;
+          if (!st.flags.pot_asked) { st.flags.pot_asked = true; this.toast('NEW TASK. MENU: ' + this.KEY.start + '.'); }
+          GAudio.sfx('confirm');
+          if (st.soupCans >= 3) {
+            st.flags.pot_filled = true;
+            st.karma += 2;
+            this.toast("THE POT'S FULL. BOWL'S ALWAYS ON.");
+          } else {
+            this.toast('IN IT GOES. ' + st.soupCans + ' OF 3.');
+          }
+        } });
       }
       if (this.invCount('can') >= 2) opts.push({ label: '2 CANS FOR MEDS', cb: () => { this.removeInv('can'); this.removeInv('can'); this.grantItem('meds'); } });
       if (this.invCount('jerky') >= 1) opts.push({ label: 'JERKY FOR BANDAGE', cb: () => { this.removeInv('jerky'); this.grantItem('bandage'); } });
       if (opts.length) {
         opts.push({ label: 'NEVER MIND', cb: null });
         this.openChoice(null, opts);
+      }
+    } else if (id === 'marta') {
+      if (st.flags.water_asked && !st.flags.marta_watered && this.hasInv('bottle')) {
+        this.openChoice(null, [
+          { label: 'GIVE WATER', cb: () => {
+            this.removeInv('bottle');
+            st.flags.marta_watered = true;
+            st.karma += 1;
+            this.grantItem('meds');
+          } },
+          { label: 'NOT NOW', cb: null },
+        ]);
+      }
+    } else if (id === 'biscuit') {
+      if (st.flags.biscuit_found) {
+        a.gone = true;
+        GAudio.sfx('bark');
       }
     } else if ((id === 'ruth' || id === 'earl') && st.flags.insulin_delivered && this.hasKey('insulin')) {
       // the dialog entry flips insulin_delivered (+1 karma); engine pays out
@@ -778,7 +909,6 @@ const Game = {
         this.noise();
         this.toast(DIALOG.toasts.noise || 'THE SOUND CARRIES.');
       }
-      st.opened[key] = 1;
       let table = t.ent.table;
       if (st.screen === 'INT_PHARMACY' && table === 'shelf') table = 'shelf_med';
       const roll = this.hashRng(st.seed + key)();
@@ -786,8 +916,16 @@ const Game = {
       const total = tab.reduce((s, e) => s + e[0], 0);
       let acc = 0, found = null;
       for (const [w, id] of tab) { acc += w; if (roll * total < acc) { found = id; break; } }
-      if (found) this.grantItem(found);
-      else this.toast('NOTHING USEFUL.');
+      const emptyP = st.diff === 'hard' ? 0.25 : st.diff === 'easy' ? 0 : 0.12;
+      if (found && emptyP && this.hashRng(st.seed + key + 'h')() < emptyP) found = null;
+      if (found) {
+        // pack full: leave the container unsearched so it can be tried again --
+        // the roll is seeded per container, so the same item waits
+        if (!this.grantItem(found)) { this.toast('IT STAYS PUT.'); return; }
+      } else {
+        this.toast('NOTHING USEFUL.');
+      }
+      st.opened[key] = 1;
     });
   },
 
@@ -907,7 +1045,7 @@ const Game = {
   useB() {
     const st = this.st;
     const id = st.bSlot;
-    if (!id) { this.toast('NOTHING EQUIPPED.'); return; }
+    if (!id) { this.toast(this.KEY.b + ' IS EMPTY. EQUIP IN PACK.'); return; }
     const def = ITEMS.defs[id];
     if (def.weapon) { this.swing(def); return; }
     if (def.light) {
@@ -944,10 +1082,15 @@ const Game = {
     st.stats.fights++;
     const routed = Actors.hit(target, def.weapon, st, this.gameApi());
     if (target.kind === 'dog') {
-      if (routed) { st.stats.dogsRouted++; }
-      else if (Actors.adjacent(target, st.px, st.py) && this.rng() < 0.4) {
-        this.gameApi().hitPlayer(1, 'dog', target);
+      if (routed) { st.stats.dogsRouted++; this.toast('IT BOLTS.'); }
+      else {
+        this.toast('IT YELPS.');
+        if (Actors.adjacent(target, st.px, st.py) && this.rng() < 0.4) {
+          this.gameApi().hitPlayer(1, 'dog', target);
+        }
       }
+    } else if ((target.kind === 'shadower' || target.kind === 'prowler') && routed) {
+      this.toast('HE RUNS.');
     }
     if (target.kind === 'npc' && target.withdrawn) {
       const both = this.actors.filter((a) => a.kind === 'npc' && (a.id === 'reyes' || a.id === 'guard'));
@@ -1000,6 +1143,7 @@ const Game = {
     const st = this.st;
     const def = ITEMS.defs[id];
     if (!this.hasInv(id)) return;
+    if (def.kind !== 'consumable') return;
     if (id === 'can') {
       if (this.hasKey('opener')) { st.meters.f = Math.min(100, st.meters.f + 35); }
       else if (this.hasKey('crowbar')) { st.meters.f = Math.min(100, st.meters.f + 17); this.toast('SPILLED HALF.'); }
@@ -1120,6 +1264,7 @@ const Game = {
       playerCovered: (LEGEND[this.tileChar(st.screen, st.px, st.py)] || {}).cover === true,
       playerMoving: !!this.moving || !!Input.dir(),
       night: Survival.phase(st.clock) === 'night',
+      diff: st.diff || 'normal',
       walkable: (x, y) => self.walkableFor(x, y, true),
       rng: () => self.rng(),
       sfx: (n) => GAudio.sfx(n),
@@ -1329,6 +1474,29 @@ const Game = {
     if (this.toastQ.length === 1) this.toastT = 90;
   },
 
+  // word-wrap into width-char lines
+  wrapN(msg, width) {
+    const words = String(msg).split(' ');
+    const lines = [''];
+    for (const w of words) {
+      const cur = lines[lines.length - 1];
+      if ((cur.length ? cur.length + 1 : 0) + w.length <= width) {
+        lines[lines.length - 1] = cur ? cur + ' ' + w : w;
+      } else lines.push(w.slice(0, width));
+    }
+    return lines;
+  },
+
+  wrap18(msg) { return this.wrapN(msg, 18).slice(0, 2); },
+
+  // one-time tutorial card(s), keyed by a run flag
+  hint(id, lines1, lines2) {
+    if (this.st.flags[id]) return false;
+    this.st.flags[id] = true;
+    this.showCard(lines1, lines2 ? () => this.showCard(lines2, null) : null);
+    return true;
+  },
+
   startBusy(total, then) {
     this.busy = { t: 0, total, then };
   },
@@ -1345,9 +1513,21 @@ const Game = {
     return st.keys.map((k) => ({ id: k, key: true })).concat(st.inv.map((i) => ({ id: i, key: false })));
   },
 
+  // quest lines for the TASKS page: {m: marker, t: text}
+  questLines() {
+    const st = this.st;
+    const out = [];
+    for (const q of QUESTS) {
+      if (q.done && this.condOk(q.done)) out.push({ m: '+', t: q.name });
+      else if (q.mid && this.condOk(q.mid)) out.push({ m: '>', t: q.midName });
+      else if (this.condOk(q.active)) out.push({ m: '>', t: q.nameFn ? q.nameFn(st) : q.name });
+    }
+    return out;
+  },
+
   updateMenu() {
     const m = this.menu;
-    const PAGES = 4;
+    const PAGES = 6;
     if (Input.pressed('left')) { m.page = (m.page + PAGES - 1) % PAGES; m.idx = 0; GAudio.sfx('blip'); }
     if (Input.pressed('right')) { m.page = (m.page + 1) % PAGES; m.idx = 0; GAudio.sfx('blip'); }
     if (Input.pressed('start') || Input.pressed('b')) {
@@ -1366,14 +1546,14 @@ const Game = {
         if (def.equip) {
           this.st.bSlot = it.id;
           GAudio.sfx('confirm');
-          this.toast('B: ' + def.name);
-        } else if (!it.key) {
+          this.toast(this.KEY.b + ': ' + def.name);
+        } else if (!it.key && def.kind === 'consumable') {
           this.consume(it.id);
         } else {
           this.toast(DIALOG.toasts[it.id] || def.name);
         }
       }
-    } else if (m.page === 3) {
+    } else if (m.page === 4) {
       const opts = ['SOUND: ' + (this.meta.sound ? 'ON' : 'OFF'), 'SAVE + QUIT', 'ABANDON RUN'];
       if (Input.pressed('up')) { m.idx = (m.idx + opts.length - 1) % opts.length; GAudio.sfx('blip'); }
       if (Input.pressed('down')) { m.idx = (m.idx + 1) % opts.length; GAudio.sfx('blip'); }
@@ -1482,6 +1662,10 @@ const Game = {
       ],
       won: !!endingTitle,
     };
+    if (st.diff && st.diff !== 'normal') {
+      this.report.rows.splice(1, 0, ['MODE', st.diff.toUpperCase()]);
+      this.report.rows.pop();
+    }
     if (endingTitle) Save.clearRun();
     this.mode = 'report';
   },
@@ -1540,6 +1724,7 @@ const Game = {
     const t = this.title;
     const rows = [
       ITEMS.loadouts.edc.name, ITEMS.loadouts.gym.name, ITEMS.loadouts.prepper.name,
+      'MODE: ' + (t.diff || 'normal').toUpperCase(),
       'SECOND WIND: ' + (t.sw ? 'ON' : 'OFF'),
     ];
     if (this.meta.won) rows.push('IRON WALK: ' + (t.iron ? 'ON' : 'OFF'));
@@ -1553,32 +1738,39 @@ const Game = {
     const focus = t.idx < 3 ? ['edc', 'gym', 'prepper'][t.idx] : null;
     if (focus) {
       const d = ITEMS.loadouts[focus].desc || '';
-      R.text(d.slice(0, 19), 4, 112, true);
-      R.text(d.slice(19, 38), 4, 122, true);
+      this.wrapN(d, 19).slice(0, 3).forEach((l, i) => R.text(l, 4, 112 + i * 10, true));
+    } else if (t.idx === 3) {
+      const m = t.diff || 'normal';
+      const blurb = m === 'easy' ? 'GENTLER PACE. MORE GUIDANCE.'
+        : m === 'hard' ? 'SCARCE, MEAN, AND FAST.' : 'THE INTENDED WALK.';
+      this.wrapN(blurb, 19).slice(0, 3).forEach((l, i) => R.text(l, 4, 112 + i * 10, true));
     } else {
-      R.text('B-BACK  A-PICK', 4, 122, true);
+      R.text(this.KEY.b + '-BACK  ' + this.KEY.a + '-PICK', 4, 122, true);
     }
   },
 
   drawCard(lines) {
     R.ctx.fillStyle = R.PAL[0];
     R.ctx.fillRect(0, 0, R.W, R.H);
-    (lines || []).forEach((l, i) => R.textCenter(l, 56 + i * 12, true));
-    if (this.frame % 60 < 40) R.textCenter('A', 128, true);
+    const out = [];
+    (lines || []).forEach((l) => this.wrapN(l, 18).forEach((w) => out.push(w)));
+    const top = Math.max(32, 56 - (out.length - 3) * 6);
+    out.slice(0, 6).forEach((l, i) => R.textCenter(l, top + i * 12, true));
+    if (this.frame % 60 < 40) R.textCenter(this.KEY.a, 128, true);
   },
 
   drawReport() {
     R.ctx.fillStyle = R.PAL[0];
     R.ctx.fillRect(0, 0, R.W, R.H);
-    R.textCenter(this.report.title, 8, true);
+    R.textCenter(String(this.report.title).slice(0, 19), 8, true);
     this.report.rows.forEach((r, i) => {
       R.text(r[0], 8, 26 + i * 11, true);
       R.text(r[1], 152 - r[1].length * 8, 26 + i * 11, true);
     });
     if (this.st && this.st.ironWalk) R.textCenter('IRON WALK', 106, true);
-    if (this.report.won) R.textCenter('B: PLAY GRID DOWN', 118, true);
-    if (this.report.won) R.textCenter('START: BLACK START', 128, true);
-    R.textCenter('A: TITLE', 130, true);
+    if (this.report.won) R.textCenter(this.KEY.b + ': PLAY GRID DOWN', 118, true);
+    if (this.report.won) R.textCenter(this.KEY.start + ': BLACK START', 128, true);
+    R.textCenter(this.KEY.a + ': TITLE', 130, true);
   },
 
   drawTransition() {
@@ -1588,14 +1780,14 @@ const Game = {
       if (half) {
         this.drawWorldFrame();
         const a = tr.t / 16;
-        R.ctx.fillStyle = 'rgba(15,56,15,' + a + ')';
+        R.ctx.fillStyle = 'rgba(16,24,32,' + a + ')';
         R.ctx.fillRect(0, 0, R.W, R.H);
       } else {
         // draw destination
         const a = 1 - (tr.t - 16) / 16;
         this.drawScreenMap(tr.to, 0, 16);
         this.drawHud();
-        R.ctx.fillStyle = 'rgba(15,56,15,' + a + ')';
+        R.ctx.fillStyle = 'rgba(16,24,32,' + a + ')';
         R.ctx.fillRect(0, 0, R.W, R.H);
       }
       return;
@@ -1668,6 +1860,8 @@ const Game = {
       if (a.kind === 'dog') {
         spr = a.state === 'alert' ? 'dog_alert' : 'dog_' + f;
         flip = a.facing === 'right';
+      } else if (a.kind === 'npc' && a.id === 'biscuit') {
+        spr = 'dog_alert'; // shivering behind the boxcar
       } else if (a.kind === 'npc' && !a.wanderer && a.id !== 'guard' && SPRITES['npc_' + a.id]) {
         spr = 'npc_' + a.id;
       } else {
@@ -1718,12 +1912,18 @@ const Game = {
 
     this.drawHud();
 
-    // toast
+    // toast (word-wrapped, up to two lines)
     if (this.toastQ.length && this.toastT > 0) {
-      const msg = this.toastQ[0];
-      const w = Math.min(156, msg.length * 8 + 6);
-      R.box(2, 17, w, 13);
-      R.text(msg.slice(0, 18), 5, 20, false);
+      const lines = this.wrap18(this.toastQ[0]);
+      const w = Math.min(156, Math.max(...lines.map((l) => l.length)) * 8 + 8);
+      R.box(2, 17, w, 6 + lines.length * 11);
+      lines.forEach((l, i) => R.text(l, 6, 21 + i * 11, false));
+    } else if (this.banner && this.banner.t > 0) {
+      const txt = this.banner.text;
+      const bw = txt.length * 8 + 10;
+      const bx = Math.floor((160 - bw) / 2);
+      R.box(bx, 17, bw, 15);
+      R.text(txt, bx + 5, 21, false);
     }
 
     // dialog / choice overlays
@@ -1739,6 +1939,11 @@ const Game = {
       const v = st.hearts - i * 2;
       R.draw(v >= 2 ? 'heart_full' : v === 1 ? 'heart_half' : 'heart_empty', 2 + i * 8, 1, {});
     }
+    // equipped B item
+    if (st.bSlot) {
+      R.text(this.KEY.b, 37, 1, true);
+      R.draw('item_' + st.bSlot, 46, 1, {});
+    }
     // phase + day
     const phase = Survival.phase(st.clock);
     const conds = Survival.conditions(st);
@@ -1748,34 +1953,35 @@ const Game = {
       else if (st.gutUntil > 0 && st.gameSec < st.gutUntil) pIcon = 'icon_gut';
       else if (st.meters.h <= 20) pIcon = 'icon_cold';
     }
-    R.draw(pIcon, 132, 1, {});
-    R.text('D' + st.day, 142, 1, true);
+    R.draw(pIcon, 124, 1, {});
+    R.text('D' + st.day, 134, 1, true);
     // meters
     const bars = [
-      ['icon_drop', 2, 9, st.meters.w],
-      ['icon_can', 41, 48, st.meters.f],
-      ['icon_flame', 80, 87, st.meters.h],
-      ['icon_bolt', 119, 126, st.meters.e],
+      ['icon_drop', 2, 9, st.meters.w, '#4894e8'],
+      ['icon_can', 41, 48, st.meters.f, '#e0b02c'],
+      ['icon_flame', 80, 87, st.meters.h, '#f08020'],
+      ['icon_bolt', 119, 126, st.meters.e, '#a0d858'],
     ];
-    for (const [icon, ix, bx, val] of bars) {
+    for (const [icon, ix, bx, val, col] of bars) {
       R.draw(icon, ix, 8, {});
       R.fillAbs(bx + 7, 10, 22, 4, 1);
       const fill = Math.ceil((val / 100) * 22);
       const blink = val <= 20 && (this.frame % 30 < 15);
-      if (!blink && fill > 0) R.fillAbs(bx + 7, 10, fill, 4, 3);
+      if (!blink && fill > 0) R.fillHex(bx + 7, 10, fill, 4, col);
     }
   },
 
   drawDialog() {
     R.box(0, 96, 160, 48);
     const box = this.dialogQ[0] || [''];
+    const lines = [];
+    box.forEach((l) => this.wrapN(l, 18).forEach((w) => lines.push(w)));
     let remaining = Math.floor(this.dialogChars);
-    for (let i = 0; i < box.length; i++) {
-      const line = box[i];
+    lines.slice(0, 3).forEach((line, i) => {
       const show = line.slice(0, Math.max(0, remaining));
       remaining -= line.length + 1;
       R.text(show, 6, 103 + i * 12, false);
-    }
+    });
     const full = box.join('\n').length;
     if (this.dialogChars >= full && this.frame % 40 < 25) R.draw('icon_arrow', 148, 134, {});
   },
@@ -1784,12 +1990,12 @@ const Game = {
     const c = this.choice;
     const h = 16 + c.options.length * 12 + (c.prompt ? 12 : 0);
     const y = 144 - h;
-    R.box(28, y, 132 - 28 + 28, h);
+    R.box(4, y, 152, h);
     let yy = y + 6;
-    if (c.prompt) { R.text(c.prompt.slice(0, 15), 36, yy, false); yy += 12; }
+    if (c.prompt) { R.text(c.prompt.slice(0, 18), 10, yy, false); yy += 12; }
     c.options.forEach((o, i) => {
-      if (i === c.idx) R.text('>', 34, yy, false);
-      R.text(o.label.slice(0, 14), 44, yy, false);
+      if (i === c.idx) R.text('>', 8, yy, false);
+      R.text(o.label.slice(0, 17), 18, yy, false);
       yy += 12;
     });
   },
@@ -1799,19 +2005,36 @@ const Game = {
     R.ctx.fillStyle = R.PAL[0];
     R.ctx.fillRect(0, 0, R.W, R.H);
     const m = this.menu;
-    const titles = ['PACK', 'MAP', 'STATUS', 'SYSTEM'];
+    const titles = ['PACK', 'MAP', 'TASKS', 'STATUS', 'SYSTEM', 'HELP'];
     R.textCenter('< ' + titles[m.page] + ' >', 4, true);
     if (m.page === 0) {
       const items = this.menuItems();
       R.text('SLOTS ' + st.inv.length + '/' + st.invMax, 8, 16, true);
-      if (st.bSlot) R.text('B: ' + ITEMS.defs[st.bSlot].name.slice(0, 12), 8, 26, true);
-      items.slice(0, 9).forEach((it, i) => {
+      if (st.bSlot) R.text(this.KEY.b + ': ' + ITEMS.defs[st.bSlot].name.slice(0, 12), 8, 26, true);
+      const VIS = 7;
+      const first = Math.max(0, Math.min(m.idx - 3, items.length - VIS));
+      items.slice(first, first + VIS).forEach((it, i) => {
         const y = 40 + i * 11;
-        if (i === m.idx) R.text('>', 4, y, true);
+        if (first + i === m.idx) R.text('>', 4, y, true);
         R.draw('item_' + it.id, 14, y, {});
-        R.text((it.key ? '*' : '') + ITEMS.defs[it.id].name.slice(0, 15), 26, y, true);
+        R.text((it.key ? '*' : '') + ITEMS.defs[it.id].name.slice(0, 14), 26, y, true);
+        if (st.bSlot === it.id) R.text(this.KEY.b, 148, y, true);
       });
+      if (items.length > VIS) {
+        R.fillAbs(157, 40, 2, VIS * 11, 1);
+        const th = Math.max(6, Math.floor(VIS * 11 * VIS / items.length));
+        const ty = 40 + Math.floor((VIS * 11 - th) * first / Math.max(1, items.length - VIS));
+        R.fillAbs(157, ty, 2, th, 3);
+      }
       if (!items.length) R.textCenter('EMPTY POCKETS', 70, true);
+      const sel = items[m.idx];
+      if (sel) {
+        const d = ITEMS.defs[sel.id];
+        let use = this.KEY.a + ': INFO';
+        if (d.equip) use = st.bSlot === sel.id ? 'EQUIPPED ON ' + this.KEY.b : this.KEY.a + ': EQUIP TO ' + this.KEY.b;
+        else if (!sel.key && d.kind === 'consumable') use = this.KEY.a + ': USE NOW';
+        R.text(use, 8, 120, true);
+      }
     } else if (m.page === 1) {
       if (!this.hasKey('map')) {
         R.textCenter('NO MAP.', 64, true);
@@ -1830,9 +2053,23 @@ const Game = {
             if (st.screen === id && this.frame % 30 < 20) R.fillAbs(x + 5, y + 4, 4, 4, 0);
           }
         }
-        R.text('HOME: F8 EAST', 30, 112, true);
+        R.text('AT ' + ((this.sc().name || st.screen) + '').slice(0, 14), 16, 112, true);
+        R.text('HOME: F8 EAST', 16, 122, true);
       }
     } else if (m.page === 2) {
+      const qs = this.questLines();
+      if (!qs.length) {
+        R.textCenter('NO TASKS YET.', 58, true);
+        R.textCenter('TALK TO PEOPLE.', 72, true);
+      } else {
+        qs.slice(0, 8).forEach((q, i) => {
+          const y = 20 + i * 12;
+          R.text(q.m, 4, y, true);
+          R.text(q.t.slice(0, 18), 14, y, true);
+        });
+        R.text('> OPEN  + DONE', 4, 120, true);
+      }
+    } else if (m.page === 3) {
       const lines = [
         'DAY ' + st.day + '  ' + Survival.clockStr(st.clock),
         'WATER ' + Math.round(st.meters.w),
@@ -1841,18 +2078,32 @@ const Game = {
         'REST  ' + Math.round(st.meters.e),
       ];
       const conds = Survival.conditions(st);
-      lines.push(conds.length ? conds.slice(0, 2).join(' ') : 'STEADY.');
+      if (conds.length) this.wrapN(conds.slice(0, 2).join(' '), 18).slice(0, 2).forEach((c) => lines.push(c));
+      else lines.push('STEADY.');
       if (st.flashCharge < 100 && this.hasKey('flashlight')) lines.push('LIGHT ' + Math.round(st.flashCharge) + '%');
       lines.forEach((l, i) => R.text(l, 12, 22 + i * 13, true));
-    } else {
+    } else if (m.page === 4) {
       const opts = ['SOUND: ' + (this.meta.sound ? 'ON' : 'OFF'), 'SAVE + QUIT', 'ABANDON RUN'];
       opts.forEach((o, i) => {
         const y = 40 + i * 14;
         if (i === m.idx) R.text('>', 12, y, true);
         R.text(o, 24, y, true);
       });
+    } else {
+      const K = this.KEY;
+      const lines = [
+        K.a + ': TALK SEARCH HIT',
+        K.b + ': USE EQUIPPED',
+        K.start + ': THIS MENU',
+        'EQUIP: PACK, THEN',
+        K.a + ' ON A TOOL.',
+        'TASKS: WHAT FOLKS',
+        'ASKED OF YOU.',
+        'HOME IS FAR EAST.',
+      ];
+      lines.forEach((l, i) => R.text(l, 8, 20 + i * 12, true));
     }
-    R.text('START: CLOSE', 36, 132, true);
+    R.text(this.KEY.start + ': CLOSE', 36, 132, true);
   },
 };
 

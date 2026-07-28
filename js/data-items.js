@@ -21,7 +21,8 @@ const ITEMS = /*JSON*/{
     "bandage":     { "name": "BANDAGE", "kind": "consumable", "heal": 2, "cures": "bleed", "equip": true },
     "meds":        { "name": "MEDS", "kind": "consumable", "cures": "gut" },
     "batteries":   { "name": "BATTERIES", "kind": "consumable", "charge": 100 },
-    "insulin":     { "name": "INSULIN", "kind": "quest" }
+    "insulin":     { "name": "INSULIN", "kind": "quest" },
+    "letter":      { "name": "JUNIE'S LETTER", "kind": "quest" }
   },
   "tables": {
     "desk":      [[20, "granola"], [15, "bottle"], [10, "bandage"], [10, "batteries"], [45, null]],
